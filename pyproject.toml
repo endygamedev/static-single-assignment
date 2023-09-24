@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "ssa"
+version = "0.0.0"
+description = "Simple utility that represents static single-assignment form from source Python file."
+authors = ["Egor Bronnikov <egorbronnikov65@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.12"
+mypy = "^1.0"
+pylint = "^2.15"
+pydocstyle = "^6.3"
+pytest = "^7.2"
+pytest-black-ng = "~0.4"
+pytest-mypy = "~0.10"
+pytest-pylint = "~0.19"
+pytest-pydocstyle = "^2.3"
+pytest-cov = "^4.0"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "too-few-public-methods"
+]
+
+[tool.pydocstyle]
+ignore = [
+    "D1",       # missing docstrings
+    "D203",     # 1 blank line required before class docstring
+    "D213"      # Multi-line docstring summary should start at the second line
+]
+
+[tool.pytest.ini_options]
+minversion = "7.2"
+addopts = [
+    "--import-mode=importlib",
+    "--black",
+    "--mypy",
+    "--pylint",
+    "--pydocstyle"
+]
+testpaths = [
+    "ssa",
+]
+
+[tools.poetry.scripts]
+ssa = "ssa.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
