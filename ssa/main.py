@@ -111,7 +111,8 @@ else:
 c = 3
 """
 
-builder = generate_cfg_from_python_code(python_code)
-graph = builder.graph
-graph.write_png("cfg.png")
+def main():
+    builder = generate_cfg_from_python_code(python_code)
+    graph = builder.graph
+    graph.write_png("cfg.png")
 
