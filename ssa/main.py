@@ -151,6 +151,17 @@ class CFGBuilder(NodeVisitor):
         else:
             self.__visit_If(node, self.statements, WhileStatement)
 
+    def visit_For(self, node):
+        print(node._fields)
+        print(node.target.id)  # `i`
+        print(node.body)  # <cycle body>
+        print(node.iter.func.id)  # `range`
+        print(node.iter.args[0].value)  # <min value in range>
+        print(node.iter.args[1].value)  # <max value in range>
+
+        # TODO: Implement `for`-handling
+        raise NotImplementedError()
+
     def append_end(self):
         self.counter += 1
         self.current = Statement(
