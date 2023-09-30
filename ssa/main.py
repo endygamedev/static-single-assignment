@@ -6,8 +6,9 @@ from enum import Enum, auto
 from dataclasses import dataclass
 from pprint import pprint
 from textwrap import dedent
+from typing import TypeVar
 
-from pydot import Dot, Node, Edge
+from pydot import Dot, Node, Edge, Subgraph
 
 
 COMPARATORS = {Gt: ">", Eq: "=="}
@@ -37,6 +38,13 @@ class Statement:
 class IfStatement(Statement):
     body: list[Statement] | None = None
     orelse: list[Statement] | None = None
+
+
+class WhileStatement(IfStatement):
+    pass
+
+
+ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)
 
 
 class CFGBuilder(NodeVisitor):
@@ -95,7 +103,12 @@ class CFGBuilder(NodeVisitor):
         else:
             self.__visit_Assign(node)
 
-    def __visit_If(self, node, statements_storage):
+    def __visit_If(
+        self,
+        node,
+        statements_storage,
+        condition_statement: ConditionStatement = IfStatement,
+    ):
         self.inner_if = True
 
         lhs = node.test.left.id
@@ -108,7 +121,7 @@ class CFGBuilder(NodeVisitor):
             rhs = node.test.comparators[0].id
         label = f"{lhs} {comparator} {rhs}"
 
-        if_statement = IfStatement(
+        if_statement = condition_statement(
             NodeData(
                 _id=self.counter,
                 _type=NodeType.IF,
@@ -135,9 +148,10 @@ class CFGBuilder(NodeVisitor):
             self.__visit_If(node, self.statements)
 
     def visit_While(self, node):
-        # TODO: Need to handle `while` here.
-        # Maybe it would be similar to `visit_If` method.
-        raise NotImplementedError()
+        if self.inner_if:
+            self.__visit_If(node, self.inner_if_statements, WhileStatement)
+        else:
+            self.__visit_If(node, self.statements, WhileStatement)
 
     def append_end(self):
         self.counter += 1
@@ -178,7 +192,14 @@ def build_graph(
 ):
     for statement in statements:
         previous, current = current, [statement.node]
-        if isinstance(statement, IfStatement):
+        if isinstance(statement, WhileStatement):
+            graph.add_node(
+                Node(current[0]._id, label=current[0].label, shape="diamond")
+            )
+            add_edge(graph, previous, current)
+            body_current, _ = build_graph(statement.body, graph, current)
+            add_edge(graph, body_current, current)
+        elif isinstance(statement, IfStatement):
             graph.add_node(
                 Node(current[0]._id, label=current[0].label, shape="diamond")
             )
@@ -189,15 +210,19 @@ def build_graph(
         elif isinstance(statement, Statement):
             color = get_color(current[0]._type)
             shape = get_shape(current[0]._type)
-            graph.add_node(
-                Node(
-                    current[0]._id,
-                    label=current[0].label,
-                    shape=shape,
-                    style="filled",
-                    fillcolor=color,
-                )
+            node = Node(
+                current[0]._id,
+                label=current[0].label,
+                shape=shape,
+                style="filled",
+                fillcolor=color,
             )
+            if current[0]._type is NodeType.END:
+                subgraph = Subgraph(rank="sink")
+                subgraph.add_node(node)
+                graph.add_subgraph(subgraph)
+            else:
+                graph.add_node(node)
             add_edge(graph, previous, current)
     return current, graph
 
@@ -208,19 +233,17 @@ def main():
         """\
     x = 1
 
-    if x > 2:
-        y = 2
-        c = 1
-    elif x == 2:
-        y = 3
-        c = 2
-    else:
-        y = 4
-
-    z = 6
-
     while z > 2:
-        z = 1
+        if x > 2:
+            y = 2
+            c = 1
+        elif x == 2:
+            y = 3
+            c = 2
+        else:
+            y = 4
+    
+    z = 6
     """
     )
 
