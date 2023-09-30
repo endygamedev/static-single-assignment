@@ -1,5 +1,3 @@
-# pylint: disable=protected-access
-
 from ast import NodeVisitor, parse, Constant, Name
 from ast import Gt, Eq
 from enum import Enum, auto
