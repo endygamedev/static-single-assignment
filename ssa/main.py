@@ -1,33 +1,70 @@
-from ast import NodeVisitor, Gt, parse
+# pylint: disable=protected-access
+
+from ast import NodeVisitor, parse, Constant, Name
+from ast import Gt, Eq
 from enum import Enum, auto
 from dataclasses import dataclass
+from pprint import pprint
+from textwrap import dedent
 
-from pydot import Dot, Edge, Node
+from pydot import Dot, Node, Edge
 
 
-symbol = {Gt: ">"}
+COMPARATORS = {Gt: ">", Eq: "=="}
 
 
 class NodeType(Enum):
     NULL = auto()
+    START = auto()
     ASSIGN = auto()
     IF = auto()
+    END = auto()
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class NodeData:
-    name: str
+    _id: int
     _type: NodeType
+    label: str
+
+
+@dataclass
+class Statement:
+    node: NodeData
+
+
+@dataclass
+class IfStatement(Statement):
+    body: list[Statement] | None = None
+    orelse: list[Statement] | None = None
+
 
 class CFGBuilder(NodeVisitor):
-    def __init__(self):
-        self.graph = Dot(graph_type='digraph')
-        self.previous_node = None
-        self.current_node = None
-            
+    def __init__(self, input_code: str) -> None:
+        # Build AST
+        tree = parse(input_code)
+
+        # Initialize attributes
+        self.counter = 0
+        self.current = Statement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.START,
+                label="Start",
+            )
+        )
+        self.statements = [self.current]
+        self.inner_if = False
+        self.inner_if_statements = []
+
+        # Run visit process
+        self.visit(tree)
+        self.append_end()
+
     def __visit(self, node):
         method_name = f"visit_{node.__class__.__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
+        self.counter += 1
         return visitor(node)
 
     def visit(self, node):
@@ -38,19 +75,18 @@ class CFGBuilder(NodeVisitor):
             self.__visit(node)
 
     def __visit_Assign(self, node):
-        if self.current_node is not None:
-            if self.current_node._type == NodeType.ASSIGN:
-                self.previous_node = self.current_node
-                self.current_node = NodeData(f"{self.previous_node.name}\n{node.targets[0].id} = {node.value.n}", NodeType.ASSIGN)
-            elif self.current_node._type == NodeType.IF:
-                self.previous_node = self.current_node
-                self.current_node = NodeData(f"{node.targets[0].id} = {node.value.n}", NodeType.ASSIGN)
-            else:
-                self.previous_node = self.current_node
-                self.current_node = NodeData(f"{node.targets[0].id} = {node.value.n}", NodeType.ASSIGN)
-                self.graph.add_edge(Edge(self.previous_node.name, self.current_node.name))
+        label = f"{node.targets[0].id} = {node.value.n}"
+        self.current = Statement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.ASSIGN,
+                label=label,
+            )
+        )
+        if not self.inner_if:
+            self.statements.append(self.current)
         else:
-            self.current_node = NodeData(f"{node.targets[0].id} = {node.value.n}", NodeType.ASSIGN)
+            self.inner_if_statements.append(self.current)
 
     def visit_Assign(self, node):
         if isinstance(node, list):
@@ -59,60 +95,137 @@ class CFGBuilder(NodeVisitor):
         else:
             self.__visit_Assign(node)
 
-    def visit_If(self, node):
+    def __visit_If(self, node, statements_storage):
+        self.inner_if = True
+
         lhs = node.test.left.id
-        ops = symbol[node.test.ops[0].__class__]
-        rhs = node.test.comparators[0].id
-        if self.current_node is not None:
-            self.current_node, self.previous_node = NodeData(f"{lhs} {ops} {rhs}", NodeType.IF), self.current_node
-            self.graph.add_edge(Edge(self.previous_node.name, self.current_node.name))
-        else:
-            self.current_node = NodeData(f"{lhs} {ops} {rhs}", NodeType.IF)
-        condition_node = self.current_node
-        
+        comparator = COMPARATORS[node.test.ops[0].__class__]
+
+        rhs = ""
+        if isinstance(node.test.comparators[0], Constant):
+            rhs = node.test.comparators[0].value
+        elif isinstance(node.test.comparators[0], Name):
+            rhs = node.test.comparators[0].id
+        label = f"{lhs} {comparator} {rhs}"
+
+        if_statement = IfStatement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.IF,
+                label=label,
+            )
+        )
+
+        statements_storage.append(if_statement)
+
+        if_statement.body = []
+        self.inner_if_statements = if_statement.body
         self.visit(node.body)
-        body_node = self.current_node
-        self.graph.add_edge(Edge(condition_node.name, body_node.name, label="True"))
 
-        self.current_node = condition_node 
-
+        if_statement.orelse = []
+        self.inner_if_statements = if_statement.orelse
         self.visit(node.orelse)
-        orelse_node = self.current_node
-        
-        self.current_node = NodeData("out", NodeType.NULL)
-        self.graph.add_edge(Edge(body_node.name, self.current_node.name))
-        
-        if node.orelse[0].__class__.__name__ != "If":
-            self.graph.add_edge(Edge(condition_node.name, orelse_node.name, label="False"))
-            self.graph.add_edge(Edge(orelse_node.name, self.current_node.name))
+
+        self.inner_if = False
+
+    def visit_If(self, node):
+        if self.inner_if:
+            self.__visit_If(node, self.inner_if_statements)
+        else:
+            self.__visit_If(node, self.statements)
+
+    def visit_While(self, node):
+        # TODO: Need to handle `while` here.
+        # Maybe it would be similar to `visit_If` method.
+        raise NotImplementedError()
+
+    def append_end(self):
+        self.counter += 1
+        self.current = Statement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.END,
+                label="End",
+            )
+        )
+        self.statements.append(self.current)
 
 
-def generate_cfg_from_python_code(input_code):
-    tree = parse(input_code)
-    builder = CFGBuilder()
-    builder.visit(tree)
-    return builder
+def get_color(node_type: NodeType) -> str:
+    match node_type:
+        case NodeType.START:
+            return "green"
+        case NodeType.END:
+            return "red"
+        case _:
+            return "white"
 
-# Example Python code
-python_code = """
-x = 1
-y = 2
 
-if x > y:
-    x = 3
-    c = 2
-    z = 3
-elif x > c:
-    z = 2
-    k = 2
-else:
-    y = 3
-    z = 2
-c = 3
-"""
+def get_shape(node_type: NodeType) -> str:
+    return "oval" if node_type is NodeType.START or node_type is NodeType.END else "box"
+
+
+def add_edge(graph: Dot, previous: list[Node], current: list[Node]) -> None:
+    if previous is not None:
+        for item in previous:
+            graph.add_edge(Edge(item._id, current[0]._id))
+
+
+def build_graph(
+    statements: list[Statement],
+    graph: Dot = Dot(graph_type="digraph"),
+    current: list[Node] = None,
+):
+    for statement in statements:
+        previous, current = current, [statement.node]
+        if isinstance(statement, IfStatement):
+            graph.add_node(
+                Node(current[0]._id, label=current[0].label, shape="diamond")
+            )
+            add_edge(graph, previous, current)
+            body_current, _ = build_graph(statement.body, graph, current)
+            orelse_current, _ = build_graph(statement.orelse, graph, current)
+            current = body_current + orelse_current
+        elif isinstance(statement, Statement):
+            color = get_color(current[0]._type)
+            shape = get_shape(current[0]._type)
+            graph.add_node(
+                Node(
+                    current[0]._id,
+                    label=current[0].label,
+                    shape=shape,
+                    style="filled",
+                    fillcolor=color,
+                )
+            )
+            add_edge(graph, previous, current)
+    return current, graph
+
 
 def main():
-    builder = generate_cfg_from_python_code(python_code)
-    graph = builder.graph
-    graph.write_png("cfg.png")
+    # Example Python code
+    python_code = dedent(
+        """\
+    x = 1
 
+    if x > 2:
+        y = 2
+        c = 1
+    elif x == 2:
+        y = 3
+        c = 2
+    else:
+        y = 4
+
+    z = 6
+
+    while z > 2:
+        z = 1
+    """
+    )
+
+    builder = CFGBuilder(python_code)
+    pprint(builder.statements)
+
+    _, graph = build_graph(builder.statements)
+    graph.write_png("cfg.png")
