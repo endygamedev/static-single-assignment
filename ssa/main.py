@@ -13,8 +13,10 @@ def main():
             if c == 0:
                 x = 1
                 x = 2
-            else:
+            elif c == 1:
                 continue
+            else:
+                break
             x = 1
         if i > 0:
             x = 3
