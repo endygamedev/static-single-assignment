@@ -26,7 +26,6 @@ class NodeType(Enum):
     START = auto()
     ASSIGN = auto()
     IF = auto()
-    WHILE = auto()
     BREAK = auto()
     CONTINUE = auto()
     END = auto()
@@ -131,14 +130,10 @@ class CFGBuilder(NodeVisitor):
             rhs = node.test.comparators[0].id
         label = f"{lhs} {comparator} {rhs}"
 
-        condition_statement_type = (
-            NodeType.WHILE if condition_statement is WhileStatement else NodeType.IF
-        )
-
         condition_statement = condition_statement(
             NodeData(
                 _id=self.counter,
-                _type=condition_statement_type,
+                _type=NodeType.IF,
                 label=label,
             )
         )
@@ -299,6 +294,8 @@ def main():
             else:
                 continue
             x = 1
+        if i > 0:
+            x = 3
         """
     )
 
