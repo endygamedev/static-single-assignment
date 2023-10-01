@@ -39,8 +39,9 @@ class BreakStatement(Statement):
     pass
 
 
+@dataclass
 class ContinueStatement(Statement):
-    pass
+    condition: NodeData
 
 
 ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)

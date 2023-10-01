@@ -42,6 +42,7 @@ class CFGBuilder(NodeVisitor):
             )
         )
         self.statements = [self.current]
+        self.break_targets = []
 
         # Run visit process
         self.visit(tree)
@@ -93,7 +94,7 @@ class CFGBuilder(NodeVisitor):
             rhs = node.test.comparators[0].id
         label = f"{lhs} {comparator} {rhs}"
 
-        condition_statement = condition_statement(
+        condition = condition_statement(
             NodeData(
                 _id=self.counter,
                 _type=NodeType.IF,
@@ -101,17 +102,23 @@ class CFGBuilder(NodeVisitor):
             )
         )
 
-        statements_storage.append(condition_statement)
+        if condition_statement is WhileStatement:
+            self.break_targets.append(condition)
+
+        statements_storage.append(condition)
 
         statements = self.statements
-        self.statements = condition_statement.body
+        self.statements = condition.body
         self.visit(node.body)
         self.statements = statements
 
         statements = self.statements
-        self.statements = condition_statement.orelse
+        self.statements = condition.orelse
         self.visit(node.orelse)
         self.statements = statements
+
+        if condition_statement is WhileStatement:
+            self.break_targets.pop()
 
     def visit_If(self, node):
         self.__visit_Condition(node, self.statements, IfStatement)
@@ -135,7 +142,8 @@ class CFGBuilder(NodeVisitor):
                 _id=self.counter,
                 _type=NodeType.CONTINUE,
                 label="continue",
-            )
+            ),
+            condition=self.break_targets[-1].node,
         )
         self.statements.append(self.current)
 

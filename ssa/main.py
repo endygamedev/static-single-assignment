@@ -10,14 +10,16 @@ def main():
     python_code = dedent(
         """\
         while i > 0:
-            if c < 0:
-                x = 1
-                x = 2
-            elif c == 1:
-                continue
-            else:
-                break
+            while j < 0:
+                if c < 0:
+                    y = 1
+                elif c == 1:
+                    continue
+                else:
+                    break
+                z = 2
             x = 1
+            continue
         if i > 0:
             x = 3
         """
