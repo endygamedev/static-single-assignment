@@ -10,7 +10,7 @@ def main():
     python_code = dedent(
         """\
         while i > 0:
-            if c == 0:
+            if c < 0:
                 x = 1
                 x = 2
             elif c == 1:

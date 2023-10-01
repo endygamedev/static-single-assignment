@@ -1,5 +1,5 @@
 from ast import NodeVisitor, parse, Constant, Name
-from ast import Gt, Eq
+from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 
 from .statements import (
     NodeData,
@@ -13,7 +13,18 @@ from .statements import (
 )
 
 
-COMPARATORS = {Gt: ">", Eq: "=="}
+COMPARATORS = {
+    Eq: "==",
+    NotEq: "!=",
+    Lt: "<",
+    LtE: "<=",
+    Gt: ">",
+    GtE: ">=",
+    Is: "is",
+    IsNot: "is not",
+    In: "in",
+    NotIn: "not in",
+}
 
 
 class CFGBuilder(NodeVisitor):
