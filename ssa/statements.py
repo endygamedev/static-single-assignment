@@ -1,7 +1,24 @@
 from dataclasses import dataclass, field
 from typing import TypeVar
+from enum import Enum, auto
 
-from .builder import NodeData
+
+class NodeType(Enum):
+    NULL = auto()
+    START = auto()
+    ASSIGN = auto()
+    IF = auto()
+    BREAK = auto()
+    CONTINUE = auto()
+    END = auto()
+
+
+@dataclass
+class NodeData:
+    _id: int
+    _type: NodeType
+    label: str
+
 
 @dataclass
 class Statement:

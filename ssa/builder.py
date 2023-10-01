@@ -1,9 +1,9 @@
 from ast import NodeVisitor, parse, Constant, Name
 from ast import Gt, Eq
-from enum import Enum, auto
-from dataclasses import dataclass
 
 from .statements import (
+    NodeData,
+    NodeType,
     Statement,
     IfStatement,
     WhileStatement,
@@ -14,23 +14,6 @@ from .statements import (
 
 
 COMPARATORS = {Gt: ">", Eq: "=="}
-
-
-class NodeType(Enum):
-    NULL = auto()
-    START = auto()
-    ASSIGN = auto()
-    IF = auto()
-    BREAK = auto()
-    CONTINUE = auto()
-    END = auto()
-
-
-@dataclass
-class NodeData:
-    _id: int
-    _type: NodeType
-    label: str
 
 
 class CFGBuilder(NodeVisitor):
@@ -51,7 +34,7 @@ class CFGBuilder(NodeVisitor):
 
         # Run visit process
         self.visit(tree)
-        self.append_end()
+        self.__append_end()
 
     def __visit(self, node):
         method_name = f"visit_{node.__class__.__name__}"
@@ -135,7 +118,7 @@ class CFGBuilder(NodeVisitor):
         )
         self.statements.append(self.current)
 
-    def visit_Continue(self, node):
+    def visit_Continue(self, node):  # pylint: disable=unused-argument
         self.current = ContinueStatement(
             NodeData(
                 _id=self.counter,
@@ -152,11 +135,15 @@ class CFGBuilder(NodeVisitor):
         print(node.iter.func.id)  # `range`
         print(node.iter.args[0].value)  # <min value in range>
         print(node.iter.args[1].value)  # <max value in range>
-
-        # TODO: Implement `for`-handling
         raise NotImplementedError()
 
-    def append_end(self):
+    def visit_Return(self, node):
+        raise NotImplementedError()
+
+    def visit_Call(self, node):
+        raise NotImplementedError()
+
+    def __append_end(self):
         self.counter += 1
         self.current = Statement(
             NodeData(

@@ -9,6 +9,7 @@ from .statements import (
     ContinueStatement,
 )
 
+
 # Need to handle when we should mark edge as `True`
 # or which edge we need to markd as `False`.
 # If `IF` node already in this list, that means
