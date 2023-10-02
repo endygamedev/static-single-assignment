@@ -10,6 +10,7 @@ from .statements import (
     BreakStatement,
     ContinueStatement,
     ConditionStatement,
+    FunctionDefStatement,
 )
 
 
@@ -25,6 +26,8 @@ COMPARATORS = {
     In: "in",
     NotIn: "not in",
 }
+
+WHILE_NEXT_NODE = {}
 
 
 class CFGBuilder(NodeVisitor):
@@ -60,6 +63,30 @@ class CFGBuilder(NodeVisitor):
                 self.__visit(item)
         else:
             self.__visit(node)
+
+    def visit_FunctionDef(self, node):
+        function = node.name
+        args = [arg.arg for arg in (node.args.args + node.args.kwonlyargs)]
+
+        label = f"{function}("
+        for arg in args:
+            label += f"{arg}, "
+        label += ")"
+
+        function_statement = FunctionDefStatement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.FUNCTION_DEF,
+                label=label,
+            )
+        )
+        self.statements.append(function_statement)
+
+        statements = self.statements
+        for item in node.body:
+            self.statements = function_statement.body
+            self.visit(item)
+        self.statements = statements
 
     def __visit_Assign(self, node):
         label = f"{node.targets[0].id} = {node.value.n}"
@@ -118,6 +145,7 @@ class CFGBuilder(NodeVisitor):
         self.statements = statements
 
         if condition_statement is WhileStatement:
+            WHILE_NEXT_NODE[self.break_targets[-1].node._id] = self.counter + 1
             self.break_targets.pop()
 
     def visit_If(self, node):
@@ -132,7 +160,8 @@ class CFGBuilder(NodeVisitor):
                 _id=self.counter,
                 _type=NodeType.BREAK,
                 label="break",
-            )
+            ),
+            condition=self.break_targets[-1].node,
         )
         self.statements.append(self.current)
 

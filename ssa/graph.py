@@ -1,12 +1,13 @@
 from pydot import Dot, Node, Edge, Subgraph
 
-from .builder import NodeType, NodeData
+from .builder import NodeType, NodeData, WHILE_NEXT_NODE
 from .statements import (
     Statement,
     IfStatement,
     WhileStatement,
     BreakStatement,
     ContinueStatement,
+    FunctionDefStatement,
 )
 
 
@@ -86,12 +87,20 @@ def build_graph(
         elif isinstance(statement, BreakStatement):
             graph.add_node(Node(current[0]._id, label=current[0].label, shape="box"))
             add_edge(graph, previous, current)
-            return current, graph
+            graph.add_edge(
+                Edge(current[0]._id, WHILE_NEXT_NODE[statement.condition._id])
+            )
+            return None, graph
         elif isinstance(statement, ContinueStatement):
             graph.add_node(Node(current[0]._id, label=current[0].label, shape="box"))
             add_edge(graph, previous, current)
             graph.add_edge(Edge(current[0]._id, statement.condition._id))
             return None, graph
+        elif isinstance(statement, FunctionDefStatement):
+            graph.add_node(Node(current[0]._id, label=current[0].label, shape="oval"))
+            add_edge(graph, previous, current)
+            body_current, _ = build_graph(statement.body, graph, current)
+            current = body_current
         elif isinstance(statement, Statement):
             color = get_color(current[0]._type)
             shape = get_shape(current[0]._type)

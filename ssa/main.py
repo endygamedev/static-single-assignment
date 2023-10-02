@@ -9,19 +9,21 @@ def main():
     # Example Python code
     python_code = dedent(
         """\
-        while i > 0:
-            while j < 0:
-                if c < 0:
-                    y = 1
-                elif c == 1:
-                    continue
-                else:
+        def function(x, *, k=2):
+            while i > 0:
+                while j < 0:
+                    if c < 0:
+                        y = 1
+                    elif c == 1:
+                        continue
+                    else:
+                        break
+                    z = 2
+                x = 1
+                if i == 2:
                     break
-                z = 2
-            x = 1
-            continue
-        if i > 0:
-            x = 3
+            if i > 0:
+                x = 3
         """
     )
 

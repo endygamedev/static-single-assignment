@@ -10,6 +10,7 @@ class NodeType(Enum):
     IF = auto()
     BREAK = auto()
     CONTINUE = auto()
+    FUNCTION_DEF = auto()
     END = auto()
 
 
@@ -24,6 +25,9 @@ class NodeData:
 class Statement:
     node: NodeData
 
+@dataclass
+class FunctionDefStatement(Statement):
+    body: list[Statement] = field(default_factory=list)
 
 @dataclass
 class IfStatement(Statement):
@@ -35,8 +39,9 @@ class WhileStatement(IfStatement):
     pass
 
 
+@dataclass
 class BreakStatement(Statement):
-    pass
+    condition: NodeData
 
 
 @dataclass
