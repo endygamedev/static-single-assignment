@@ -1,5 +1,3 @@
-from pprint import pprint
-
 from pydot import Dot, Node, Edge, Subgraph
 
 from .builder import NodeType, NodeData, CFGBuilder
@@ -8,6 +6,7 @@ from .statements import (
     IfStatement,
     WhileStatement,
     BreakStatement,
+    ContinueStatement,
 )
 
 
@@ -61,13 +60,31 @@ class GraphBuilder:
                 return ""
 
     def add_edge(
-        self, previous: NodeData, current: NodeData, *, is_break=False
+        self,
+        previous: NodeData,
+        current: NodeData,
+        *,
+        is_break=False,
+        is_continue=False,
     ) -> None:
+        # "is_break" and "is_continue"
+        # cannot be assigned "True" both
+        assert not is_break or not is_continue
+
         label = self.get_edge_label(previous)
+
+        # Label for "break" branch
         if is_break and label != "":
             label = f"{label} (B)"
         elif is_break:
             label = "B"
+
+        # Label for "continue" branch
+        if is_continue and label != "":
+            label = f"{label} (C)"
+        elif is_continue:
+            label = "C"
+
         self.graph.add_edge(Edge(previous._id, current._id, label=label))
 
     def build(self):
@@ -95,7 +112,7 @@ class GraphBuilder:
                 if body_current is not None:
                     for item in body_current:
                         match item._type:
-                            case NodeType.BREAK:
+                            case NodeType.BREAK | NodeType.CONTINUE:
                                 current.append(item)
                             case _:
                                 self.add_edge(item, current[0])
@@ -139,6 +156,14 @@ class GraphBuilder:
                         is_break=True,
                     )
                 return
+            elif isinstance(statement, ContinueStatement):
+                for item in self.previous:
+                    self.add_edge(
+                        item,
+                        statement.while_statement.node,
+                        is_continue=True,
+                    )
+                return
             elif isinstance(statement, Statement):
                 color = self.get_color(self.current[0]._type)
                 shape = self.get_shape(self.current[0]._type)
@@ -160,7 +185,8 @@ class GraphBuilder:
 
                 if self.previous is not None:
                     for item in self.previous:
-                        if item._type is NodeType.BREAK:
-                            continue
-                        else:
-                            self.add_edge(item, self.current[0])
+                        match item._type:
+                            case NodeType.BREAK | NodeType.CONTINUE:
+                                continue
+                            case _:
+                                self.add_edge(item, self.current[0])

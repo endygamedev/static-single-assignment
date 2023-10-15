@@ -10,13 +10,7 @@ def main():
     python_code = dedent(
         """\
         while x > 1000:
-            u = 2000
-            while x > 2000:
-                if x > 10:
-                    y = 20
-                    z = 10
-                elif x > 10:
-                    break
+            continue
         """
     )
 

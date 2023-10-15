@@ -41,4 +41,9 @@ class BreakStatement(Statement):
     while_statement: Statement
 
 
+@dataclass
+class ContinueStatement(Statement):
+    while_statement: Statement
+
+
 ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)

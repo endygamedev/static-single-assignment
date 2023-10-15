@@ -9,6 +9,7 @@ from .statements import (
     WhileStatement,
     ConditionStatement,
     BreakStatement,
+    ContinueStatement,
 )
 
 
@@ -149,6 +150,19 @@ class CFGBuilder(NodeVisitor):
             NodeData(
                 _id=self.counter,
                 _type=NodeType.BREAK,
+                label=label,
+            ),
+            while_statement=self.while_nodes[-1],
+        )
+        self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
+
+    def visit_Continue(self, node):  # pylint: disable=unused-argument
+        label = "continue"
+        self.current = ContinueStatement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.CONTINUE,
                 label=label,
             ),
             while_statement=self.while_nodes[-1],
