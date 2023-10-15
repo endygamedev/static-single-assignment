@@ -27,12 +27,6 @@ class Statement:
 
 
 @dataclass
-class FunctionDefStatement(Statement):
-    function_id: int
-    body: list[Statement] = field(default_factory=list)
-
-
-@dataclass
 class IfStatement(Statement):
     body: list[Statement] = field(default_factory=list)
     orelse: list[Statement] = field(default_factory=list)
@@ -42,16 +36,9 @@ class WhileStatement(IfStatement):
     pass
 
 
-# @dataclass
-# class BreakStatement(Statement):
-#     condition: int
-#     source: int
-
-
-# @dataclass
-# class ContinueStatement(Statement):
-#     condition: NodeData
-#     from_state: NodeData
+@dataclass
+class BreakStatement(Statement):
+    while_statement: Statement
 
 
 ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)

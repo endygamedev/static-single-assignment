@@ -8,7 +8,7 @@ from .statements import (
     IfStatement,
     WhileStatement,
     ConditionStatement,
-    FunctionDefStatement,
+    BreakStatement,
 )
 
 
@@ -41,7 +41,11 @@ class CFGBuilder(NodeVisitor):
             )
         )
         self.statements = [self.current]
-        self.break_targets = []
+        self.while_nodes = []
+        self.node_after_while = dict()
+        self.id2statement = dict()
+        self.last_node_while = []
+        self.id2statement[self.counter] = self.current
 
         # Run visit process
         self.visit(tree)
@@ -60,32 +64,6 @@ class CFGBuilder(NodeVisitor):
         else:
             self.__visit(node)
 
-    def visit_FunctionDef(self, node):
-        function = node.name
-        args = [arg.arg for arg in (node.args.args + node.args.kwonlyargs)]
-
-        label = f"{function}("
-        for i, arg in enumerate(args):
-            label += f"{arg}, " if i < len(args) - 1 else arg
-        label += ")"
-
-        function_statement = FunctionDefStatement(
-            NodeData(
-                _id=self.counter,
-                _type=NodeType.FUNCTION_DEF,
-                label=label,
-            ),
-            function_id=self.function_counter,
-        )
-        self.statements.append(function_statement)
-        self.function_counter += 1
-
-        statements = self.statements
-        for item in node.body:
-            self.statements = function_statement.body
-            self.visit(item)
-        self.statements = statements
-
     def __visit_Assign(self, node):
         label = f"{node.targets[0].id} = {node.value.n}"
         self.current = Statement(
@@ -96,6 +74,7 @@ class CFGBuilder(NodeVisitor):
             )
         )
         self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
 
     def visit_Assign(self, node):
         if isinstance(node, list):
@@ -126,12 +105,13 @@ class CFGBuilder(NodeVisitor):
                 label=label,
             )
         )
-        self.id2node[self.counter] = condition
+        statements_storage.append(condition)
+        condition_id = self.counter
+        self.id2statement[condition_id] = condition
 
         if condition_statement is WhileStatement:
-            self.break_targets.append((self.counter, node.body[-1]))
-
-        statements_storage.append(condition)
+            self.while_nodes.append(condition)
+            self.last_node_while.append(node.body[-1])
 
         statements = self.statements
         self.statements = condition.body
@@ -140,26 +120,22 @@ class CFGBuilder(NodeVisitor):
 
         statements = self.statements
         self.statements = condition.orelse
-        if condition_statement is IfStatement:
-            if len(node.orelse) == 1:
-                node.orelse[0].condition_statement = condition.node._id
         self.visit(node.orelse)
         self.statements = statements
 
         if condition_statement is WhileStatement:
-            if len(self.break_targets) > 1 and (
-                isinstance(self.break_targets[-2][1], While)
+            if len(self.while_nodes) >= 2 and isinstance(
+                self.last_node_while[-2], While
             ):
-                _target = self.break_targets[-2][0]
+                # If this while is inner to another while
+                # and while is the last statement of outer while
+                # then we need to go to outer while condition
+                self.node_after_while[condition_id] = self.while_nodes[-2].node._id
             else:
-                item = condition.body[-1]
-                _target = item.node._id + 1
-                while isinstance(item, IfStatement):
-                    item = item.body[-1]
-                    _target = item.node._id + 1
-            print(_target)
-            self.next_node_after_while[self.break_targets[-1][0]] = _target
-            self.break_targets.pop()
+                # Else we need to go to next node after while
+                self.node_after_while[condition_id] = self.counter + 1
+            self.last_node_while.pop()
+            self.while_nodes.pop()
 
     def visit_If(self, node):
         self.__visit_Condition(node, self.statements, IfStatement)
@@ -168,33 +144,17 @@ class CFGBuilder(NodeVisitor):
         self.__visit_Condition(node, self.statements, WhileStatement)
 
     def visit_Break(self, node):  # pylint: disable=unused-argument
-        if not hasattr(node, "condition_statement"):
-            source = self.counter - 1
-        else:
-            source = node.condition_statement
+        label = "break"
         self.current = BreakStatement(
             NodeData(
                 _id=self.counter,
                 _type=NodeType.BREAK,
-                label="break",
+                label=label,
             ),
-            condition=self.break_targets[-1],
-            source=source,
+            while_statement=self.while_nodes[-1],
         )
         self.statements.append(self.current)
-
-    def visit_Continue(self, node):  # pylint: disable=unused-argument
-        pass
-        # self.current = ContinueStatement(
-        #     NodeData(
-        #         _id=self.counter,
-        #         _type=NodeType.CONTINUE,
-        #         label="continue",
-        #     ),
-        #     from_state=self.continue_targets[-1].node,
-        #     condition=self.break_targets[-1].node,
-        # )
-        # self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
 
     def visit_For(self, node):
         print(node._fields)
@@ -221,3 +181,4 @@ class CFGBuilder(NodeVisitor):
             )
         )
         self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
