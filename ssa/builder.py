@@ -1,4 +1,13 @@
-from ast import NodeVisitor, parse, Constant, Name, While, Assign, BinOp, Compare
+from ast import (
+    NodeVisitor,
+    parse,
+    Constant,
+    Name,
+    While,
+    Assign,
+    BinOp,
+    Compare,
+)
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 from ast import (
     Add,
@@ -26,6 +35,7 @@ from .statements import (
     ConditionStatement,
     BreakStatement,
     ContinueStatement,
+    FunctionStatement,
 )
 
 
@@ -236,15 +246,15 @@ class CFGBuilder(NodeVisitor):
     def visit_For(self, node):
         variable = node.target.id
         match len(node.iter.args):
-            case 3:
+            case 3:  # Example: `for i in range(1, 10, 1)`
                 max_value = node.iter.args[1].value
                 min_value = node.iter.args[0].value
                 step_value = node.iter.args[2].value
-            case 2:
+            case 2:  # Example: `for i in range(1, 10)`
                 max_value = node.iter.args[1].value
                 min_value = node.iter.args[0].value
                 step_value = 1
-            case 1:
+            case 1:  # Example: `for i in range(10)`
                 max_value = node.iter.args[0].value
                 min_value = 0
                 step_value = 1
@@ -274,10 +284,39 @@ class CFGBuilder(NodeVisitor):
             ),
         )
 
+    def visit_FunctionDef(self, node):
+        print(node._fields)
+        name = node.name
+        label = f"def {name}("
+        args_values = node.args.args
+        args = ""
+        for i, arg in enumerate(args_values):
+            args += f"{arg.arg}, " if i != len(args_values) - 1 else arg.arg
+        label += f"{args})"
+        print(label)
+
+        function = FunctionStatement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.FUNCTION_DEF,
+                label=label,
+            )
+        )
+        self.statements.append(function)
+
+        statements = self.statements
+        self.statements = function.body
+        self.visit(node.body)
+        self.statements = statements
+        function.last_function_node = self.current
+
     def visit_Return(self, node):
         raise NotImplementedError()
 
     def visit_Call(self, node):
+        raise NotImplementedError()
+
+    def visit_AugAssign(self, node):
         raise NotImplementedError()
 
     def __append_end(self):

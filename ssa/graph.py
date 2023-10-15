@@ -1,4 +1,4 @@
-from pydot import Dot, Node, Edge, Subgraph
+from pydot import Dot, Node, Edge, Subgraph, Cluster
 
 from .builder import NodeType, NodeData, CFGBuilder
 from .statements import (
@@ -7,6 +7,7 @@ from .statements import (
     WhileStatement,
     BreakStatement,
     ContinueStatement,
+    FunctionStatement,
 )
 
 
@@ -27,6 +28,9 @@ class GraphBuilder:
         self.if_nodes: list[NodeData] = []
         self.id2statement = builder.id2statement
         self.node_after_while = builder.node_after_while
+
+        # This thing need for function definition block
+        self.current_function_cluster = None
 
         # Build graph
         self.build()
@@ -66,6 +70,8 @@ class GraphBuilder:
         *,
         is_break=False,
         is_continue=False,
+        ltail="",
+        lhead="",
     ) -> None:
         # "is_break" and "is_continue"
         # cannot be assigned "True" both
@@ -85,7 +91,9 @@ class GraphBuilder:
         elif is_continue:
             label = "C"
 
-        self.graph.add_edge(Edge(previous._id, current._id, label=label))
+        self.graph.add_edge(
+            Edge(previous._id, current._id, label=label, ltail=ltail, lhead=lhead)
+        )
 
     def build(self):
         for statement in self.statements:
@@ -164,6 +172,40 @@ class GraphBuilder:
                         is_continue=True,
                     )
                 return
+            elif isinstance(statement, FunctionStatement):
+                self.current_function_cluster = None
+                function_cluster = Cluster(self.current[0].label)
+
+                function_node = Node(
+                    self.current[0]._id,
+                    label=self.current[0].label,
+                    shape="egg",
+                )
+                self.graph.add_node(function_node)
+
+                for item in self.previous:
+                    self.add_edge(
+                        item,
+                        self.current[0],
+                        ltail=function_cluster.get_name(),
+                        lhead=function_cluster.get_name(),
+                    )
+
+                # Pre
+                current = self.current
+                statements, self.statements = self.statements, statement.body
+                graph, self.graph = self.graph, function_cluster
+
+                # Build body
+                self.build()
+
+                # Post
+                self.current, body_current = current, self.current
+                self.statements = statements
+                self.graph = graph
+                self.graph.add_subgraph(function_cluster)
+                self.current = [statement.last_function_node.node]
+                self.current_function_cluster = function_cluster
             elif isinstance(statement, Statement):
                 color = self.get_color(self.current[0]._type)
                 shape = self.get_shape(self.current[0]._type)
@@ -189,4 +231,13 @@ class GraphBuilder:
                             case NodeType.BREAK | NodeType.CONTINUE:
                                 continue
                             case _:
-                                self.add_edge(item, self.current[0])
+                                if self.current_function_cluster is not None:
+                                    # This case needs when we have last
+                                    # function definition block
+                                    self.add_edge(
+                                        item,
+                                        self.current[0],
+                                        ltail=self.current_function_cluster.get_name(),
+                                    )
+                                else:
+                                    self.add_edge(item, self.current[0])
