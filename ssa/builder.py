@@ -1,4 +1,4 @@
-from ast import NodeVisitor, parse, Constant, Name
+from ast import NodeVisitor, parse, Constant, Name, While
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 
 from .statements import (
@@ -7,8 +7,6 @@ from .statements import (
     Statement,
     IfStatement,
     WhileStatement,
-    BreakStatement,
-    ContinueStatement,
     ConditionStatement,
     FunctionDefStatement,
 )
@@ -26,8 +24,6 @@ COMPARATORS = {
     In: "in",
     NotIn: "not in",
 }
-
-WHILE_NEXT_NODE = {}
 
 
 class CFGBuilder(NodeVisitor):
@@ -69,8 +65,8 @@ class CFGBuilder(NodeVisitor):
         args = [arg.arg for arg in (node.args.args + node.args.kwonlyargs)]
 
         label = f"{function}("
-        for arg in args:
-            label += f"{arg}, "
+        for i, arg in enumerate(args):
+            label += f"{arg}, " if i < len(args) - 1 else arg
         label += ")"
 
         function_statement = FunctionDefStatement(
@@ -78,9 +74,11 @@ class CFGBuilder(NodeVisitor):
                 _id=self.counter,
                 _type=NodeType.FUNCTION_DEF,
                 label=label,
-            )
+            ),
+            function_id=self.function_counter,
         )
         self.statements.append(function_statement)
+        self.function_counter += 1
 
         statements = self.statements
         for item in node.body:
@@ -128,9 +126,10 @@ class CFGBuilder(NodeVisitor):
                 label=label,
             )
         )
+        self.id2node[self.counter] = condition
 
         if condition_statement is WhileStatement:
-            self.break_targets.append(condition)
+            self.break_targets.append((self.counter, node.body[-1]))
 
         statements_storage.append(condition)
 
@@ -141,11 +140,25 @@ class CFGBuilder(NodeVisitor):
 
         statements = self.statements
         self.statements = condition.orelse
+        if condition_statement is IfStatement:
+            if len(node.orelse) == 1:
+                node.orelse[0].condition_statement = condition.node._id
         self.visit(node.orelse)
         self.statements = statements
 
         if condition_statement is WhileStatement:
-            WHILE_NEXT_NODE[self.break_targets[-1].node._id] = self.counter + 1
+            if len(self.break_targets) > 1 and (
+                isinstance(self.break_targets[-2][1], While)
+            ):
+                _target = self.break_targets[-2][0]
+            else:
+                item = condition.body[-1]
+                _target = item.node._id + 1
+                while isinstance(item, IfStatement):
+                    item = item.body[-1]
+                    _target = item.node._id + 1
+            print(_target)
+            self.next_node_after_while[self.break_targets[-1][0]] = _target
             self.break_targets.pop()
 
     def visit_If(self, node):
@@ -155,26 +168,33 @@ class CFGBuilder(NodeVisitor):
         self.__visit_Condition(node, self.statements, WhileStatement)
 
     def visit_Break(self, node):  # pylint: disable=unused-argument
+        if not hasattr(node, "condition_statement"):
+            source = self.counter - 1
+        else:
+            source = node.condition_statement
         self.current = BreakStatement(
             NodeData(
                 _id=self.counter,
                 _type=NodeType.BREAK,
                 label="break",
             ),
-            condition=self.break_targets[-1].node,
+            condition=self.break_targets[-1],
+            source=source,
         )
         self.statements.append(self.current)
 
     def visit_Continue(self, node):  # pylint: disable=unused-argument
-        self.current = ContinueStatement(
-            NodeData(
-                _id=self.counter,
-                _type=NodeType.CONTINUE,
-                label="continue",
-            ),
-            condition=self.break_targets[-1].node,
-        )
-        self.statements.append(self.current)
+        pass
+        # self.current = ContinueStatement(
+        #     NodeData(
+        #         _id=self.counter,
+        #         _type=NodeType.CONTINUE,
+        #         label="continue",
+        #     ),
+        #     from_state=self.continue_targets[-1].node,
+        #     condition=self.break_targets[-1].node,
+        # )
+        # self.statements.append(self.current)
 
     def visit_For(self, node):
         print(node._fields)

@@ -25,9 +25,12 @@ class NodeData:
 class Statement:
     node: NodeData
 
+
 @dataclass
 class FunctionDefStatement(Statement):
+    function_id: int
     body: list[Statement] = field(default_factory=list)
+
 
 @dataclass
 class IfStatement(Statement):
@@ -39,14 +42,16 @@ class WhileStatement(IfStatement):
     pass
 
 
-@dataclass
-class BreakStatement(Statement):
-    condition: NodeData
+# @dataclass
+# class BreakStatement(Statement):
+#     condition: int
+#     source: int
 
 
-@dataclass
-class ContinueStatement(Statement):
-    condition: NodeData
+# @dataclass
+# class ContinueStatement(Statement):
+#     condition: NodeData
+#     from_state: NodeData
 
 
 ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)

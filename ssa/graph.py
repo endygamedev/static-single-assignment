@@ -1,6 +1,8 @@
-from pydot import Dot, Node, Edge, Subgraph
+from pydot import Dot, Node, Edge, Subgraph, Cluster
+from pprint import pprint
+from ast import If
 
-from .builder import NodeType, NodeData, WHILE_NEXT_NODE
+from .builder import NodeType, NodeData, CFGBuilder
 from .statements import (
     Statement,
     IfStatement,
@@ -11,111 +13,211 @@ from .statements import (
 )
 
 
-# Need to handle when we should mark edge as `True`
-# or which edge we need to markd as `False`.
-# If `IF` node already in this list, that means
-# that we need the edge as `False`, because
-# at the first round we mark another edge as `True`.
-# `True` branch is first and `False` is the second.
-IF_NODES: list[NodeData] = []
+class GraphBuilder:
+    def __init__(self, builder: CFGBuilder):
+        self.statements: list[Statement] = builder.statements
+        self.next_node_after_while: dict[int, int] = builder.next_node_after_while
+        # self.last_if_action: dict[int, int] = builder.last_if_action
 
+        self.graph: Dot = Dot(graph_type="digraph", compound="true")
+        self.current = None
+        self.previous = None
 
-def get_color(node_type: NodeType) -> str:
-    match node_type:
-        case NodeType.START:
-            return "green"
-        case NodeType.END:
-            return "red"
-        case _:
-            return "white"
+        # Need to handle when we should mark edge as `True`
+        # or which edge we need to mark it as `False`.
+        # If `IF` node already in this list, that means
+        # that we need the edge as `False`, because
+        # at the first round we mark another edge as `True`.
+        # `True` branch is first and `False` is the second.
+        self.if_nodes: list[NodeData] = []
+        self.id2node = builder.id2node
 
+        # Build graph
+        self.build()
 
-def get_shape(node_type: NodeType) -> str:
-    return "oval" if node_type is NodeType.START or node_type is NodeType.END else "box"
+    @staticmethod
+    def get_color(node_type: NodeType) -> str:
+        match node_type:
+            case NodeType.START:
+                return "green"
+            case NodeType.END:
+                return "red"
+            case _:
+                return "white"
 
+    @staticmethod
+    def get_shape(node_type: NodeType) -> str:
+        match node_type:
+            case NodeType.START | NodeType.END:
+                return "oval"
+            case _:
+                return "box"
 
-def get_edge_label(previous: NodeData) -> str:
-    if previous._type is NodeType.IF and previous in IF_NODES:
-        return "F"
-    elif previous._type is NodeType.IF:
-        IF_NODES.append(previous)
-        return "T"
-    else:
-        return ""
+    def get_edge_label(self, previous: NodeData) -> str:
+        match previous._type:
+            case NodeType.IF if previous in self.if_nodes:
+                return "F"
+            case NodeType.IF:
+                self.if_nodes.append(previous)
+                return "T"
+            case _:
+                return ""
 
+    def add_edge(self, previous: NodeData, current: NodeData) -> None:
+        label = self.get_edge_label(previous)
+        self.graph.add_edge(Edge(previous._id, current._id, label=label))
 
-def add_edge(graph: Dot, previous: list[Node], current: list[Node]) -> None:
-    if previous is not None:
-        for item in previous:
-            label = get_edge_label(item)
-            graph.add_edge(Edge(item._id, current[0]._id, label=label))
+    def build(self):
+        for statement in self.statements:
+            self.previous, self.current = self.current, [statement.node]
+            if isinstance(statement, WhileStatement):
+                self.graph.add_node(
+                    Node(
+                        self.current[0]._id,
+                        label=self.current[0].label,
+                        shape="diamond",
+                    )
+                )
 
+                if self.previous is not None:
+                    for item in self.previous:
+                        self.add_edge(item, self.current[0])
 
-def build_graph(
-    statements: list[Statement],
-    graph: Dot = Dot(graph_type="digraph"),
-    current: list[Node] = None,
-):
-    for statement in statements:
-        previous, current = current, [statement.node]
-        if isinstance(statement, WhileStatement):
-            graph.add_node(
-                Node(current[0]._id, label=current[0].label, shape="diamond")
-            )
-            add_edge(graph, previous, current)
-            body_current, _ = build_graph(statement.body, graph, current)
-            if body_current is not None:
-                for item in body_current:
-                    match item._type:
-                        case NodeType.BREAK:
-                            current.append(item)
-                        case _:
-                            add_edge(graph, [item], current)
-        elif isinstance(statement, IfStatement):
-            graph.add_node(
-                Node(current[0]._id, label=current[0].label, shape="diamond")
-            )
-            add_edge(graph, previous, current)
-            body_current, _ = build_graph(statement.body, graph, current)
-            orelse_current, _ = build_graph(statement.orelse, graph, current)
-            if body_current is None:
-                current = orelse_current
-            elif orelse_current is None:
-                current = body_current
-            else:
-                current = body_current + orelse_current
-        elif isinstance(statement, BreakStatement):
-            graph.add_node(Node(current[0]._id, label=current[0].label, shape="box"))
-            add_edge(graph, previous, current)
-            graph.add_edge(
-                Edge(current[0]._id, WHILE_NEXT_NODE[statement.condition._id])
-            )
-            return None, graph
-        elif isinstance(statement, ContinueStatement):
-            graph.add_node(Node(current[0]._id, label=current[0].label, shape="box"))
-            add_edge(graph, previous, current)
-            graph.add_edge(Edge(current[0]._id, statement.condition._id))
-            return None, graph
-        elif isinstance(statement, FunctionDefStatement):
-            graph.add_node(Node(current[0]._id, label=current[0].label, shape="oval"))
-            add_edge(graph, previous, current)
-            body_current, _ = build_graph(statement.body, graph, current)
-            current = body_current
-        elif isinstance(statement, Statement):
-            color = get_color(current[0]._type)
-            shape = get_shape(current[0]._type)
-            node = Node(
-                current[0]._id,
-                label=current[0].label,
-                shape=shape,
-                style="filled",
-                fillcolor=color,
-            )
-            if current[0]._type is NodeType.END:
-                subgraph = Subgraph(rank="sink")
-                subgraph.add_node(node)
-                graph.add_subgraph(subgraph)
-            else:
-                graph.add_node(node)
-            add_edge(graph, previous, current)
-    return current, graph
+                current = self.current
+                statements, self.statements = self.statements, statement.body
+                self.build()
+                self.current, body_current = current, self.current
+                self.statements = statements
+
+                if body_current is not None:
+                    for item in body_current:
+                        match item._type:
+                            case NodeType.BREAK:
+                                current.append(item)
+                            case _:
+                                self.add_edge(item, current[0])
+            elif isinstance(statement, IfStatement):
+                self.graph.add_node(
+                    Node(
+                        self.current[0]._id,
+                        label=self.current[0].label,
+                        shape="diamond",
+                    )
+                )
+
+                if self.previous is not None:
+                    for item in self.previous:
+                        self.add_edge(item, self.current[0])
+
+                current = self.current
+                statements, self.statements = self.statements, statement.body
+                self.build()
+                self.current, body_current = current, self.current
+                self.statements = statements
+
+                current = self.current
+                statements, self.statements = self.statements, statement.orelse
+                self.build()
+                self.current, orelse_current = current, self.current
+                self.statements = statements
+
+                if body_current is None:
+                    self.current = orelse_current
+                elif orelse_current is None:
+                    self.current = body_current
+                else:
+                    self.current = body_current + orelse_current
+            elif isinstance(statement, BreakStatement):
+                label = "B"
+                print(isinstance(statement.condition[1], If))
+                # if (
+                #     statement.is_previous_condition
+                #     and self.get_edge_label(self.id2node[statement.previous].node)
+                #     == "T"
+                # ):
+                #     label = f"T ({label})"
+                # elif (
+                #     statement.is_previous_condition
+                #     and self.get_edge_label(self.id2node[statement.previous].node)
+                #     == "F"
+                # ):
+                #     label = f"F ({label})"
+                edge = Edge(
+                    statement.source,
+                    self.next_node_after_while[statement.condition[0]],
+                    label=label,
+                )
+                self.graph.add_edge(edge)
+                return
+                # # graph.add_node(Node(current[0]._id, label=current[0].label, shape="box"))
+                # # add_edge(graph, previous, current)
+
+                # edge = Edge(
+                #     current[0]._id - 2,
+                #     self.next_node_after_while[statement.condition._id],
+                # )
+
+                # edge_list = [
+                #     (edge.get_source(), edge.get_destination())
+                #     for edge in self.graph.get_edge_list()
+                # ]
+
+                # print((edge.get_source(), edge.get_destination()))
+                # print(edge_list)
+
+                # if (edge.get_source(), edge.get_destination()) in edge_list:
+                #     print(edge)
+                # return None, self.graph
+            # elif isinstance(statement, ContinueStatement):
+            #     edge = Edge(
+            #         self.last_if_action[statement.from_state._id],
+            #         statement.condition._id,
+            #         label="C",
+            #     )
+            #     self.graph.add_edge(edge)
+            #     self.current = None
+            #     self.if_nodes.append(self.last_if_action[statement.from_state._id])
+            #     return
+            # elif isinstance(statement, FunctionDefStatement):
+            #     function_block = Cluster("cluster0", color="blue", cluster=True)
+            #     function_block.add_node(
+            #         Node(current[0]._id, label=current[0].label, shape="oval")
+            #     )
+            #     print("Cluster: " + function_block.get_name())
+            #     self.graph.add_edge(
+            #         Edge(
+            #             previous[0]._id, current[0]._id, lhead=function_block.get_name()
+            #         )
+            #     )
+            #     # self.graph.add_edge(Edge(previous, current))
+            #     graph = self.graph
+            #     self.graph = function_block
+            #     body_current, _ = self.build_graph(statement.body, current)
+            #     self.graph = graph
+            #     graph.add_subgraph(function_block)
+            #     current = body_current
+            elif isinstance(statement, Statement):
+                color = self.get_color(self.current[0]._type)
+                shape = self.get_shape(self.current[0]._type)
+                node = Node(
+                    self.current[0]._id,
+                    label=self.current[0].label,
+                    shape=shape,
+                    style="filled",
+                    fillcolor=color,
+                )
+
+                match self.current[0]._type:
+                    case NodeType.END:
+                        subgraph = Subgraph(rank="sink")
+                        subgraph.add_node(node)
+                        self.graph.add_subgraph(subgraph)
+                    case _:
+                        self.graph.add_node(node)
+
+                if self.previous is not None:
+                    for item in self.previous:
+                        if item._type is NodeType.BREAK:
+                            continue
+                        else:
+                            self.add_edge(item, self.current[0])
