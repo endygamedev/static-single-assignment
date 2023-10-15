@@ -9,8 +9,9 @@ def main():
     # Example Python code
     python_code = dedent(
         """\
-        while x > 1000:
-            continue
+        x = 10
+        for i in range(10, 10, 2):
+            x = 10
         """
     )
 

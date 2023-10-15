@@ -1,4 +1,4 @@
-from ast import NodeVisitor, parse, Constant, Name, While
+from ast import NodeVisitor, parse, Constant, Name, While, Assign
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 
 from .statements import (
@@ -66,6 +66,8 @@ class CFGBuilder(NodeVisitor):
             self.__visit(node)
 
     def __visit_Assign(self, node):
+        print(node.targets)
+        print(node.value)
         label = f"{node.targets[0].id} = {node.value.n}"
         self.current = Statement(
             NodeData(
@@ -171,13 +173,34 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
 
     def visit_For(self, node):
-        print(node._fields)
-        print(node.target.id)  # `i`
-        print(node.body)  # <cycle body>
-        print(node.iter.func.id)  # `range`
-        print(node.iter.args[0].value)  # <min value in range>
-        print(node.iter.args[1].value)  # <max value in range>
-        raise NotImplementedError()
+        index = node.target.id
+        match len(node.iter.args):
+            case 3:
+                max_value = node.iter.args[1].value
+                min_value = node.iter.args[0].value
+                step_value = node.iter.args[2].value
+            case 2:
+                max_value = node.iter.args[1].value
+                min_value = node.iter.args[0].value
+                step_value = 1
+            case 1:
+                max_value = node.iter.args[0].value
+                min_value = 0
+                step_value = 1
+
+        # Set basic assign case
+        assign_node = Assign(targets=[Name(id=index)], value=Constant(n=min_value))
+        self.__visit_Assign(assign_node)
+
+        # TODO: We need to interpreter FOR as WHILE
+
+        # print(node._fields)
+        # print(node.target.id)  # `i`
+        # print(node.body)  # <cycle body>
+        # print(node.iter.func.id)  # `range`
+        # print(node.iter.args[0].value)  # <min value in range>
+        # print(node.iter.args[1].value)  # <max value in range>
+        # raise NotImplementedError()
 
     def visit_Return(self, node):
         raise NotImplementedError()
