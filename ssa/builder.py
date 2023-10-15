@@ -1,5 +1,21 @@
-from ast import NodeVisitor, parse, Constant, Name, While, Assign
+from ast import NodeVisitor, parse, Constant, Name, While, Assign, BinOp, Compare
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
+from ast import (
+    Add,
+    Sub,
+    Mult,
+    MatMult,
+    Div,
+    Mod,
+    Pow,
+    BitOr,
+    BitAnd,
+    BitXor,
+    FloorDiv,
+    LShift,
+    RShift,
+)
+from dataclasses import dataclass
 
 from .statements import (
     NodeData,
@@ -25,6 +41,28 @@ COMPARATORS = {
     In: "in",
     NotIn: "not in",
 }
+
+OPERATORS = {
+    Add: "+",
+    Sub: "-",
+    Mult: "*",
+    MatMult: "@",
+    Div: "/",
+    Mod: "%",
+    Pow: "**",
+    LShift: "<<",
+    RShift: ">>",
+    BitOr: "|",
+    BitXor: "^",
+    BitAnd: "&",
+    FloorDiv: "//",
+}
+
+
+@dataclass
+class ForAsWhileData:
+    variable: str
+    step: int
 
 
 class CFGBuilder(NodeVisitor):
@@ -66,9 +104,19 @@ class CFGBuilder(NodeVisitor):
             self.__visit(node)
 
     def __visit_Assign(self, node):
-        print(node.targets)
-        print(node.value)
-        label = f"{node.targets[0].id} = {node.value.n}"
+        variable = node.targets[0].id
+        if isinstance(node.value, BinOp):
+            # TODO: This works only for binary operations: var `op` chat
+            # Example: x = x + 1
+            lhs = node.value.left.id
+            operator = OPERATORS[node.value.op.__class__]
+            rhs = node.value.right.value
+            value = f"{lhs} {operator} {rhs}"
+        elif isinstance(node.value, Constant):
+            value = str(node.value.n)
+
+        label = f"{variable} = {value}"
+
         self.current = Statement(
             NodeData(
                 _id=self.counter,
@@ -91,6 +139,8 @@ class CFGBuilder(NodeVisitor):
         node,
         statements_storage,
         condition_statement: ConditionStatement,
+        *,
+        for_data: ForAsWhileData | None = None,
     ):
         lhs = node.test.left.id
         comparator = COMPARATORS[node.test.ops[0].__class__]
@@ -115,6 +165,17 @@ class CFGBuilder(NodeVisitor):
         if condition_statement is WhileStatement:
             self.while_nodes.append(condition)
             self.last_node_while.append(node.body[-1])
+
+        if for_data is not None:
+            increment_assign_node = Assign(
+                targets=[Name(id=for_data.variable)],
+                value=BinOp(
+                    left=Name(id=for_data.variable),
+                    op=Add(),
+                    right=Constant(value=for_data.step),
+                ),
+            )
+            node.body.append(increment_assign_node)
 
         statements = self.statements
         self.statements = condition.body
@@ -173,7 +234,7 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
 
     def visit_For(self, node):
-        index = node.target.id
+        variable = node.target.id
         match len(node.iter.args):
             case 3:
                 max_value = node.iter.args[1].value
@@ -189,18 +250,29 @@ class CFGBuilder(NodeVisitor):
                 step_value = 1
 
         # Set basic assign case
-        assign_node = Assign(targets=[Name(id=index)], value=Constant(n=min_value))
+        assign_node = Assign(targets=[Name(id=variable)], value=Constant(n=min_value))
         self.__visit_Assign(assign_node)
 
         # TODO: We need to interpreter FOR as WHILE
-
-        # print(node._fields)
-        # print(node.target.id)  # `i`
-        # print(node.body)  # <cycle body>
-        # print(node.iter.func.id)  # `range`
-        # print(node.iter.args[0].value)  # <min value in range>
-        # print(node.iter.args[1].value)  # <max value in range>
-        # raise NotImplementedError()
+        while_node = While(
+            test=Compare(
+                left=Name(id=variable),
+                ops=[Lt()],
+                comparators=[Constant(n=max_value)],
+            ),
+            body=node.body,
+            orelse=node.orelse,
+        )
+        self.counter += 1
+        self.__visit_Condition(
+            while_node,
+            self.statements,
+            WhileStatement,
+            for_data=ForAsWhileData(
+                variable=variable,
+                step=step_value,
+            ),
+        )
 
     def visit_Return(self, node):
         raise NotImplementedError()

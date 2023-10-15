@@ -30,6 +30,9 @@ disable = [
     "protected-access"
 ]
 
+[tool.pylint."MISCELLANEOUS"]
+notes=TODO
+
 [tool.pydocstyle]
 ignore = [
     "D1",       # missing docstrings
