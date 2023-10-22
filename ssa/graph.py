@@ -180,6 +180,8 @@ class GraphBuilder:
                     self.current[0]._id,
                     label=self.current[0].label,
                     shape="egg",
+                    style="filled",
+                    fillcolor="orange"
                 )
                 self.graph.add_node(function_node)
 
@@ -204,8 +206,34 @@ class GraphBuilder:
                 self.statements = statements
                 self.graph = graph
                 self.graph.add_subgraph(function_cluster)
-                self.current = [statement.last_function_node.node]
+                self.current = body_current
                 self.current_function_cluster = function_cluster
+            elif isinstance(statement, Statement) and statement.node._type is NodeType.FUNCTION_END:
+                node = Node(
+                    self.current[0]._id,
+                    label=self.current[0].label,
+                    shape="egg",
+                    style="filled",
+                    fillcolor="orange",
+                )
+                subgraph = Subgraph(rank="sink")
+                subgraph.add_node(node)
+                self.graph.add_subgraph(subgraph)
+                for item in self.previous:
+                    match item._type:
+                        case NodeType.BREAK | NodeType.CONTINUE:
+                            continue
+                        case _:
+                            if self.current_function_cluster is not None:
+                                # This case needs when we have last
+                                # function definition block
+                                self.add_edge(
+                                    item,
+                                    self.current[0],
+                                    ltail=self.current_function_cluster.get_name(),
+                                )
+                            else:
+                                self.add_edge(item, self.current[0])
             elif isinstance(statement, Statement):
                 color = self.get_color(self.current[0]._type)
                 shape = self.get_shape(self.current[0]._type)

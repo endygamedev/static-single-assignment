@@ -11,6 +11,7 @@ class NodeType(Enum):
     BREAK = auto()
     CONTINUE = auto()
     FUNCTION_DEF = auto()
+    FUNCTION_END = auto()
     END = auto()
 
 
@@ -49,7 +50,6 @@ class ContinueStatement(Statement):
 @dataclass
 class FunctionStatement(Statement):
     body: list[Statement] = field(default_factory=list)
-    last_function_node: NodeData | None = None
 
 
 ConditionStatement = TypeVar("ConditionStatement", IfStatement, WhileStatement)

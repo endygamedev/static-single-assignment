@@ -15,9 +15,7 @@ def main():
         def function(x, y, z):
             x = 100
             for i in range(10):
-                if x > 10:
-                    x = 2000
-        x = 1000
+                continue
         """
     )
 

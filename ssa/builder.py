@@ -287,13 +287,13 @@ class CFGBuilder(NodeVisitor):
     def visit_FunctionDef(self, node):
         print(node._fields)
         name = node.name
-        label = f"def {name}("
+        function_name = f"{name}("
         args_values = node.args.args
         args = ""
         for i, arg in enumerate(args_values):
             args += f"{arg.arg}, " if i != len(args_values) - 1 else arg.arg
-        label += f"{args})"
-        print(label)
+        function_name += f"{args})"
+        label = f"def {function_name}"
 
         function = FunctionStatement(
             NodeData(
@@ -307,8 +307,20 @@ class CFGBuilder(NodeVisitor):
         statements = self.statements
         self.statements = function.body
         self.visit(node.body)
+
+        self.counter += 1
+        label = f"End of {function_name}"
+        function_end = Statement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.FUNCTION_END,
+                label=label,
+            )
+        )
+        self.statements.append(function_end)
+        self.current = function_end
+        self.id2statement[self.counter] = self.current
         self.statements = statements
-        function.last_function_node = self.current
 
     def visit_Return(self, node):
         raise NotImplementedError()
