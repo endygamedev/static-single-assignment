@@ -1,7 +1,9 @@
-x = 1
-x = 2
-x = x + 1
-x = 1 + x
+x = 10
+y = 2
 
-if 10 > x:
-    y = 0
+if x > 2:
+    y = 3
+else:
+    y = 5
+
+print(y)
