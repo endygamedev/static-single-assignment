@@ -29,6 +29,7 @@ disable = [
     "too-few-public-methods",
     "protected-access"
 ]
+redefining-builtins-modules = "sys"
 
 [tool.pydocstyle]
 ignore = [

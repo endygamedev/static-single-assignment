@@ -1,5 +1,6 @@
 from pprint import pprint
 from textwrap import dedent
+from sys import exit
 
 from .builder import CFGBuilder
 from .graph import GraphBuilder
@@ -9,15 +10,15 @@ def main():
     # Example Python code
     python_code = dedent(
         """\
-        if x > 10:
-            y = 20
-
-        def function(x, y, z):
-            x = 100
-            for i in range(10):
-                continue
+        return 4
         """
     )
+
+    try:
+        compile(python_code, "", "exec")
+    except SyntaxError as exc:
+        print(f"Syntax Error: {exc}")
+        exit(1)
 
     builder = CFGBuilder(python_code)
     pprint(builder.statements)
