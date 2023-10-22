@@ -347,7 +347,7 @@ class CFGBuilder(NodeVisitor):
         self.visit(node.body)
 
         self.counter += 1
-        label = f"End of {function_name}"
+        label = f"End of function `{name}`"
         function_end = Statement(
             NodeData(
                 _id=self.counter,
