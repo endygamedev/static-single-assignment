@@ -361,7 +361,23 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
 
     def visit_Call(self, node):
-        raise NotImplementedError()
+        label = f"{node.func.id}("
+        for i, arg in enumerate(node.args):
+            if isinstance(arg, Constant):
+                label += f"{arg.value}, " if i != len(node.args) - 1 else f"{arg.value}"
+            elif isinstance(arg, Name):
+                label += f"{arg.id}, " if i != len(node.args) - 1 else arg.id
+        label += ")"
+
+        self.current = Statement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.CALL,
+                label=label,
+            ),
+        )
+        self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
 
     def visit_AugAssign(self, node):
         raise NotImplementedError()

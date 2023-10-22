@@ -11,6 +11,7 @@ class NodeType(Enum):
     BREAK = auto()
     CONTINUE = auto()
     RETURN = auto()
+    CALL = auto()
     FUNCTION_DEF = auto()
     FUNCTION_END = auto()
     END = auto()
