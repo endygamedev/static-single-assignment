@@ -7,8 +7,6 @@ from ast import (
     Assign,
     BinOp,
     Compare,
-    Return,
-    walk,
 )
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 from ast import (
@@ -287,6 +285,8 @@ class CFGBuilder(NodeVisitor):
             ),
         )
 
+    # This funciton need for setting all return statements
+    # to the end of the function definition
     def set_end_to_return(
         self,
         statement: Statement,
