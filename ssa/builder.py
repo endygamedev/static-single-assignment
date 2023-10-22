@@ -26,6 +26,7 @@ from ast import (
     RShift,
 )
 from dataclasses import dataclass
+from collections import defaultdict
 
 from .statements import (
     NodeData,
@@ -97,6 +98,7 @@ class CFGBuilder(NodeVisitor):
         self.id2statement = dict()
         self.last_node_while = []
         self.id2statement[self.counter] = self.current
+        self.ssa_list = [defaultdict(int)]
 
         # Run visit process
         self.visit(tree)
@@ -117,10 +119,12 @@ class CFGBuilder(NodeVisitor):
 
     def __visit_Assign(self, node):
         variable = node.targets[0].id
+        variable_version = self.ssa_list[-1][variable] + 1
+        variable_label = f"{variable}.{variable_version}"
         if isinstance(node.value, BinOp):
             # TODO: This works only for binary operations: var `op` chat
             # Example: x = x + 1
-            lhs = node.value.left.id
+            lhs = self.__get_argument_value(node.value.left)
             operator = OPERATORS[node.value.op.__class__]
             rhs = self.__get_argument_value(node.value.right)
             value = f"{lhs} {operator} {rhs}"
@@ -137,7 +141,8 @@ class CFGBuilder(NodeVisitor):
                     value += f"{arg.id}, " if i != len(node.value.args) - 1 else arg.id
             value += ")"
 
-        label = f"{variable} = {value}"
+        label = f"{variable_label} = {value}"
+        self.ssa_list[-1][variable] += 1
 
         self.current = Statement(
             NodeData(
@@ -164,13 +169,9 @@ class CFGBuilder(NodeVisitor):
         *,
         for_data: ForAsWhileData | None = None,
     ):
-        lhs = node.test.left.id
+        lhs = self.__get_argument_value(node.test.left)
         comparator = COMPARATORS[node.test.ops[0].__class__]
-        rhs = ""
-        if isinstance(node.test.comparators[0], Constant):
-            rhs = node.test.comparators[0].value
-        elif isinstance(node.test.comparators[0], Name):
-            rhs = node.test.comparators[0].id
+        rhs = self.__get_argument_value(node.test.comparators[0])
         label = f"{lhs} {comparator} {rhs}"
 
         condition = condition_statement(
@@ -255,12 +256,11 @@ class CFGBuilder(NodeVisitor):
         self.statements.append(self.current)
         self.id2statement[self.counter] = self.current
 
-    @staticmethod
-    def __get_argument_value(arg):
+    def __get_argument_value(self, arg):
         if isinstance(arg, Constant):
             return arg.value
         elif isinstance(arg, Name):
-            return arg.id
+            return f"{arg.id}.{self.ssa_list[-1][arg.id]}"
 
     def visit_For(self, node):
         variable = node.target.id
@@ -325,8 +325,11 @@ class CFGBuilder(NodeVisitor):
         function_name = f"{name}("
         args_values = node.args.args
         args = ""
+        ssa = self.ssa_list[-1]
         for i, arg in enumerate(args_values):
-            args += f"{arg.arg}, " if i != len(args_values) - 1 else arg.arg
+            ssa[arg.arg] += 1
+            arg_label = f"{arg.arg}.{ssa[arg.arg]}"
+            args += f"{arg_label}, " if i != len(args_values) - 1 else arg_label
         function_name += f"{args})"
         label = f"def {function_name}"
 
@@ -360,12 +363,7 @@ class CFGBuilder(NodeVisitor):
         self.statements = statements
 
     def visit_Return(self, node):
-        node_value = node.value
-        value = ""
-        if isinstance(node_value, Constant):
-            value = node_value.value
-        elif isinstance(node_value, Name):
-            value = node_value.id
+        value = self.__get_argument_value(node.value)
 
         label = f"return {value}"
         self.current = ReturnStatement(
@@ -382,16 +380,18 @@ class CFGBuilder(NodeVisitor):
         label = f"{node.func.id}("
         for i, arg in enumerate(node.args):
             if isinstance(arg, Constant):
-                label += f"{arg.value}, " if i != len(node.args) - 1 else f"{arg.value}"
+                label += f"{arg.value}, " if i != len(node.args) - 1 else arg.value
             elif isinstance(arg, Name):
-                label += f"{arg.id}, " if i != len(node.args) - 1 else arg.id
+                arg_label = f"{arg.id}.{self.ssa_list[-1][arg.id]}"
+                label += f"{arg_label}, " if i != len(node.args) - 1 else arg_label
             elif isinstance(arg, Call):
                 label += f"{arg.func.id}("
                 for i, aarg in enumerate(arg.args):
                     if isinstance(aarg, Constant):
                         label += f"{aarg.value}, " if i != len(arg.args) - 1 else f"{aarg.value}"
                     elif isinstance(aarg, Name):
-                        label += f"{aarg.id}, " if i != len(arg.args) - 1 else aarg.id
+                        arg_label = f"{aarg.id}.{self.ssa_list[-1][aarg.id]}"
+                        label += f"{arg_label}, " if i != len(arg.args) - 1 else arg_label
                 label += ")"
         label += ")"
 
