@@ -1,18 +1,15 @@
 from pprint import pprint
-from textwrap import dedent
 from sys import exit
+from pathlib import Path
 
 from .builder import CFGBuilder
 from .graph import GraphBuilder
 
 
 def main():
-    # Example Python code
-    python_code = dedent(
-        """\
-        return 4
-        """
-    )
+    # Example of Python code
+    # See `../tests/example.py` for details
+    python_code = Path("./tests/example.py").read_text(encoding="utf-8")
 
     try:
         compile(python_code, "", "exec")
