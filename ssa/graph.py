@@ -8,6 +8,7 @@ from .statements import (
     BreakStatement,
     ContinueStatement,
     FunctionStatement,
+    ReturnStatement,
 )
 
 
@@ -120,7 +121,7 @@ class GraphBuilder:
                 if body_current is not None:
                     for item in body_current:
                         match item._type:
-                            case NodeType.BREAK | NodeType.CONTINUE:
+                            case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
                                 current.append(item)
                             case _:
                                 self.add_edge(item, current[0])
@@ -135,7 +136,11 @@ class GraphBuilder:
 
                 if self.previous is not None:
                     for item in self.previous:
-                        self.add_edge(item, self.current[0])
+                        match item._type:
+                            case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
+                                continue
+                            case _:
+                                self.add_edge(item, self.current[0])
 
                 current = self.current
                 statements, self.statements = self.statements, statement.body
@@ -172,6 +177,33 @@ class GraphBuilder:
                         is_continue=True,
                     )
                 return
+            elif isinstance(statement, ReturnStatement):
+                node = Node(
+                    self.current[0]._id,
+                    label=self.current[0].label,
+                    shape="box",
+                    style="filled",
+                    fillcolor="grey",
+                )
+                self.graph.add_node(node)
+                for item in self.previous:
+                    match item._type:
+                        case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
+                            continue
+                        case _:
+                            if self.current_function_cluster is not None:
+                                # This case needs when we have last
+                                # function definition block
+                                self.add_edge(
+                                    item,
+                                    self.current[0],
+                                    ltail=self.current_function_cluster.get_name(),
+                                )
+                            else:
+                                self.add_edge(item, self.current[0])
+                self.add_edge(self.current[0], statement.
+                end_of_function_statement.node)
+                continue
             elif isinstance(statement, FunctionStatement):
                 self.current_function_cluster = None
                 function_cluster = Cluster(self.current[0].label)
@@ -181,7 +213,7 @@ class GraphBuilder:
                     label=self.current[0].label,
                     shape="egg",
                     style="filled",
-                    fillcolor="orange"
+                    fillcolor="orange",
                 )
                 self.graph.add_node(function_node)
 
@@ -208,7 +240,10 @@ class GraphBuilder:
                 self.graph.add_subgraph(function_cluster)
                 self.current = body_current
                 self.current_function_cluster = function_cluster
-            elif isinstance(statement, Statement) and statement.node._type is NodeType.FUNCTION_END:
+            elif (
+                isinstance(statement, Statement)
+                and statement.node._type is NodeType.FUNCTION_END
+            ):
                 node = Node(
                     self.current[0]._id,
                     label=self.current[0].label,
@@ -221,7 +256,7 @@ class GraphBuilder:
                 self.graph.add_subgraph(subgraph)
                 for item in self.previous:
                     match item._type:
-                        case NodeType.BREAK | NodeType.CONTINUE:
+                        case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
                             continue
                         case _:
                             if self.current_function_cluster is not None:
@@ -256,7 +291,7 @@ class GraphBuilder:
                 if self.previous is not None:
                     for item in self.previous:
                         match item._type:
-                            case NodeType.BREAK | NodeType.CONTINUE:
+                            case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
                                 continue
                             case _:
                                 if self.current_function_cluster is not None:

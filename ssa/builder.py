@@ -7,6 +7,8 @@ from ast import (
     Assign,
     BinOp,
     Compare,
+    Return,
+    walk,
 )
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 from ast import (
@@ -36,6 +38,7 @@ from .statements import (
     BreakStatement,
     ContinueStatement,
     FunctionStatement,
+    ReturnStatement,
 )
 
 
@@ -284,8 +287,22 @@ class CFGBuilder(NodeVisitor):
             ),
         )
 
+    def set_end_to_return(
+        self,
+        statement: Statement,
+        end_of_function_statement: Statement,
+    ):
+        if not hasattr(statement, "body"):
+            if isinstance(statement, ReturnStatement):
+                statement.end_of_function_statement = end_of_function_statement
+        else:
+            for item in statement.body:
+                self.set_end_to_return(item, end_of_function_statement)
+
+            for item in statement.orelse:
+                self.set_end_to_return(item, end_of_function_statement)
+
     def visit_FunctionDef(self, node):
-        print(node._fields)
         name = node.name
         function_name = f"{name}("
         args_values = node.args.args
@@ -319,11 +336,29 @@ class CFGBuilder(NodeVisitor):
         )
         self.statements.append(function_end)
         self.current = function_end
+        for statement in self.statements:
+            self.set_end_to_return(statement, function_end)
         self.id2statement[self.counter] = self.current
         self.statements = statements
 
     def visit_Return(self, node):
-        raise NotImplementedError()
+        node_value = node.value
+        value = ""
+        if isinstance(node_value, Constant):
+            value = node_value.value
+        elif isinstance(node_value, Name):
+            value = node_value.id
+
+        label = f"return {value}"
+        self.current = ReturnStatement(
+            NodeData(
+                _id=self.counter,
+                _type=NodeType.RETURN,
+                label=label,
+            ),
+        )
+        self.statements.append(self.current)
+        self.id2statement[self.counter] = self.current
 
     def visit_Call(self, node):
         raise NotImplementedError()
