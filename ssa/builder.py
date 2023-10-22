@@ -380,7 +380,12 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
 
     def visit_AugAssign(self, node):
-        raise NotImplementedError()
+        variable = node.target.id
+        assign_node = Assign(
+            targets=[Name(id=variable)],
+            value=BinOp(left=Name(id=variable), op=node.op, right=node.value),
+        )
+        self.__visit_Assign(assign_node)
 
     def __append_end(self):
         self.counter += 1
