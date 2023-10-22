@@ -7,6 +7,7 @@ from ast import (
     Assign,
     BinOp,
     Compare,
+    Call,
 )
 from ast import Eq, NotEq, Lt, LtE, Gt, GtE, Is, IsNot, In, NotIn
 from ast import (
@@ -127,6 +128,14 @@ class CFGBuilder(NodeVisitor):
             value = str(node.value.n)
         elif isinstance(node.value, Name):
             value = node.value.id
+        elif isinstance(node.value, Call):
+            value = f"{node.value.func.id}("
+            for i, arg in enumerate(node.value.args):
+                if isinstance(arg, Constant):
+                    value += f"{arg.value}, " if i != len(node.value.args) - 1 else f"{arg.value}"
+                elif isinstance(arg, Name):
+                    value += f"{arg.id}, " if i != len(node.value.args) - 1 else arg.id
+            value += ")"
 
         label = f"{variable} = {value}"
 
@@ -376,6 +385,14 @@ class CFGBuilder(NodeVisitor):
                 label += f"{arg.value}, " if i != len(node.args) - 1 else f"{arg.value}"
             elif isinstance(arg, Name):
                 label += f"{arg.id}, " if i != len(node.args) - 1 else arg.id
+            elif isinstance(arg, Call):
+                label += f"{arg.func.id}("
+                for i, aarg in enumerate(arg.args):
+                    if isinstance(aarg, Constant):
+                        label += f"{aarg.value}, " if i != len(arg.args) - 1 else f"{aarg.value}"
+                    elif isinstance(aarg, Name):
+                        label += f"{aarg.id}, " if i != len(arg.args) - 1 else aarg.id
+                label += ")"
         label += ")"
 
         self.current = Statement(

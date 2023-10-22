@@ -12,4 +12,4 @@ def fib(n):
 
     return c
 
-print(fib(10))
+print(fib(55))
