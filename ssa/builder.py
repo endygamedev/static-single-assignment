@@ -121,10 +121,12 @@ class CFGBuilder(NodeVisitor):
             # Example: x = x + 1
             lhs = node.value.left.id
             operator = OPERATORS[node.value.op.__class__]
-            rhs = node.value.right.value
+            rhs = self.__get_argument_value(node.value.right)
             value = f"{lhs} {operator} {rhs}"
         elif isinstance(node.value, Constant):
             value = str(node.value.n)
+        elif isinstance(node.value, Name):
+            value = node.value.id
 
         label = f"{variable} = {value}"
 
@@ -244,19 +246,26 @@ class CFGBuilder(NodeVisitor):
         self.statements.append(self.current)
         self.id2statement[self.counter] = self.current
 
+    @staticmethod
+    def __get_argument_value(arg):
+        if isinstance(arg, Constant):
+            return arg.value
+        elif isinstance(arg, Name):
+            return arg.id
+
     def visit_For(self, node):
         variable = node.target.id
         match len(node.iter.args):
             case 3:  # Example: `for i in range(1, 10, 1)`
-                max_value = node.iter.args[1].value
-                min_value = node.iter.args[0].value
-                step_value = node.iter.args[2].value
+                max_value = self.__get_argument_value(node.iter.args[1])
+                min_value = self.__get_argument_value(node.iter.args[0])
+                step_value = self.__get_argument_value(node.iter.args[2])
             case 2:  # Example: `for i in range(1, 10)`
-                max_value = node.iter.args[1].value
-                min_value = node.iter.args[0].value
+                max_value = self.__get_argument_value(node.iter.args[1])
+                min_value = self.__get_argument_value(node.iter.args[0])
                 step_value = 1
             case 1:  # Example: `for i in range(10)`
-                max_value = node.iter.args[0].value
+                max_value = self.__get_argument_value(node.iter.args[0])
                 min_value = 0
                 step_value = 1
 
