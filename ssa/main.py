@@ -11,6 +11,7 @@ def main():
     # See `../tests/example.py` for details
     python_code = Path("./tests/example.py").read_text(encoding="utf-8")
 
+    # Validate that syntax is correct
     try:
         compile(python_code, "", "exec")
     except SyntaxError as exc:
