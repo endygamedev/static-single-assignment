@@ -138,7 +138,8 @@ class CFGBuilder(NodeVisitor):
                 if isinstance(arg, Constant):
                     value += f"{arg.value}, " if i != len(node.value.args) - 1 else f"{arg.value}"
                 elif isinstance(arg, Name):
-                    value += f"{arg.id}, " if i != len(node.value.args) - 1 else arg.id
+                    arg_label = f"{arg.id}.{self.ssa_list[-1][arg.id]}"
+                    value += f"{arg_label}, " if i != len(node.value.args) - 1 else arg_label
             value += ")"
 
         label = f"{variable_label} = {value}"
