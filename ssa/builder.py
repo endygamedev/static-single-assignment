@@ -27,6 +27,7 @@ from ast import (
 )
 from dataclasses import dataclass
 from collections import defaultdict
+from copy import deepcopy
 
 from .statements import (
     NodeData,
@@ -100,6 +101,11 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
         self.ssa_list = [defaultdict(int)]
 
+        # Saving SSA state
+        self.if_true_ssa = []
+        self.if_false_ssa = []
+        self.if_before_true_ssa = []
+
         # Run visit process
         self.visit(tree)
         self.__append_end()
@@ -136,10 +142,16 @@ class CFGBuilder(NodeVisitor):
             value = f"{node.value.func.id}("
             for i, arg in enumerate(node.value.args):
                 if isinstance(arg, Constant):
-                    value += f"{arg.value}, " if i != len(node.value.args) - 1 else f"{arg.value}"
+                    value += (
+                        f"{arg.value}, "
+                        if i != len(node.value.args) - 1
+                        else f"{arg.value}"
+                    )
                 elif isinstance(arg, Name):
                     arg_label = f"{arg.id}.{self.ssa_list[-1][arg.id]}"
-                    value += f"{arg_label}, " if i != len(node.value.args) - 1 else arg_label
+                    value += (
+                        f"{arg_label}, " if i != len(node.value.args) - 1 else arg_label
+                    )
             value += ")"
 
         label = f"{variable_label} = {value}"
@@ -201,15 +213,18 @@ class CFGBuilder(NodeVisitor):
             )
             node.body.append(increment_assign_node)
 
+        self.if_before_true_ssa = deepcopy(self.ssa_list)
         statements = self.statements
         self.statements = condition.body
         self.visit(node.body)
         self.statements = statements
+        self.if_true_ssa = deepcopy(self.ssa_list)
 
         statements = self.statements
         self.statements = condition.orelse
         self.visit(node.orelse)
         self.statements = statements
+        self.if_false_ssa = deepcopy(self.ssa_list)
 
         if condition_statement is WhileStatement:
             if len(self.while_nodes) >= 2 and isinstance(
@@ -225,11 +240,41 @@ class CFGBuilder(NodeVisitor):
             self.last_node_while.pop()
             self.while_nodes.pop()
 
+    def __create_phi_block(self, lhs: dict, rhs: dict) -> list[str]:
+        edited = []
+        for key, value in lhs[-1].items():
+            if key in rhs[-1] and (other := rhs[-1][key]) != value:
+                edited.append(key)
+                self.ssa_list[-1][key] = max(value, other) + 1
+                self.counter += 1
+                label: str = (
+                    f"{key}.{self.ssa_list[-1][key]} = φ({key}.{value}, {key}.{other})"
+                )
+                self.current = Statement(
+                        NodeData(_id=self.counter, _type=NodeType.ASSIGN, label=label)
+                    )
+                self.statements.append(self.current)
+            self.id2statement[self.counter] = self.current
+        return edited
+
+    def __create_phi_functions(self) -> None:
+        edited: list = self.__create_phi_block(self.if_true_ssa, self.if_false_ssa)
+
+        check = True
+        for key, value in self.if_before_true_ssa[-1].items():
+            if key in self.if_true_ssa[-1] and key not in edited:
+                check = self.if_true_ssa[-1][key] == value
+
+        if not check:
+            self.__create_phi_block(self.if_true_ssa, self.if_before_true_ssa)
+
     def visit_If(self, node):
         self.__visit_Condition(node, self.statements, IfStatement)
+        self.__create_phi_functions()
 
     def visit_While(self, node):
         self.__visit_Condition(node, self.statements, WhileStatement)
+        self.__create_phi_functions()
 
     def visit_Break(self, node):  # pylint: disable=unused-argument
         label = "break"
@@ -389,10 +434,16 @@ class CFGBuilder(NodeVisitor):
                 label += f"{arg.func.id}("
                 for i, aarg in enumerate(arg.args):
                     if isinstance(aarg, Constant):
-                        label += f"{aarg.value}, " if i != len(arg.args) - 1 else f"{aarg.value}"
+                        label += (
+                            f"{aarg.value}, "
+                            if i != len(arg.args) - 1
+                            else f"{aarg.value}"
+                        )
                     elif isinstance(aarg, Name):
                         arg_label = f"{aarg.id}.{self.ssa_list[-1][aarg.id]}"
-                        label += f"{arg_label}, " if i != len(arg.args) - 1 else arg_label
+                        label += (
+                            f"{arg_label}, " if i != len(arg.args) - 1 else arg_label
+                        )
                 label += ")"
         label += ")"
 
