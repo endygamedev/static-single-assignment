@@ -137,7 +137,7 @@ class CFGBuilder(NodeVisitor):
         elif isinstance(node.value, Constant):
             value = str(node.value.n)
         elif isinstance(node.value, Name):
-            value = node.value.id
+            value = f"{node.value.id}.{self.ssa_list[-1][node.value.id]}"
         elif isinstance(node.value, Call):
             value = f"{node.value.func.id}("
             for i, arg in enumerate(node.value.args):
