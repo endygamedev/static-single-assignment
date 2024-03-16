@@ -101,6 +101,10 @@ class CFGBuilder(NodeVisitor):
         self.id2statement[self.counter] = self.current
         self.ssa_list = [defaultdict(int)]
 
+        self.ssa_list_before = [defaultdict(int)]
+        self.finded_keys = []
+        self.ssa_list_after = [defaultdict(int)]
+
         # Saving SSA state
         self.if_true_ssa = []
         self.if_false_ssa = []
@@ -182,6 +186,29 @@ class CFGBuilder(NodeVisitor):
         *,
         for_data: ForAsWhileData | None = None,
     ):
+        phi_function_id = self.counter
+        if condition_statement is WhileStatement:
+            label = ""
+            print(self.ssa_list_before)
+            print(self.ssa_list_after)
+            for i, key in enumerate(self.finded_keys):
+                label += f"{key}.{self.ssa_list_before[-1][key] + 1} = φ({key}.{self.ssa_list_before[-1][key]}, {key}.{self.ssa_list_after[-1][key] + 1})"
+                if i != len(self.finded_keys) - 1:
+                    label += "\n"
+            phi_statement = Statement(
+                NodeData(
+                    _id=self.counter,
+                    _type=NodeType.ASSIGN,
+                    label=label
+                )
+            )
+            statements_storage.append(phi_statement)
+            self.id2statement[self.counter] = phi_statement
+            self.while_nodes.append(phi_statement)
+            self.last_node_while.append(node.body[-1])
+
+
+        self.counter += 1
         lhs = self.__get_argument_value(node.test.left)
         comparator = COMPARATORS[node.test.ops[0].__class__]
         rhs = self.__get_argument_value(node.test.comparators[0])
@@ -198,9 +225,6 @@ class CFGBuilder(NodeVisitor):
         condition_id = self.counter
         self.id2statement[condition_id] = condition
 
-        if condition_statement is WhileStatement:
-            self.while_nodes.append(condition)
-            self.last_node_while.append(node.body[-1])
 
         if for_data is not None:
             increment_assign_node = Assign(
@@ -233,14 +257,16 @@ class CFGBuilder(NodeVisitor):
                 # If this while is inner to another while
                 # and while is the last statement of outer while
                 # then we need to go to outer while condition
-                self.node_after_while[condition_id] = self.while_nodes[-2].node._id
+                self.node_after_while[phi_function_id] = self.while_nodes[-2].node._id
             else:
                 # Else we need to go to next node after while
-                self.node_after_while[condition_id] = self.counter + 1
+                self.node_after_while[phi_function_id] = self.counter + 1
             self.last_node_while.pop()
             self.while_nodes.pop()
 
-    def __create_phi_block(self, lhs: dict, rhs: dict) -> list[str]:
+    def __create_phi_block(
+        self, statements: list[Statement], lhs: dict, rhs: dict
+    ) -> list[str]:
         edited = []
         for key, value in lhs[-1].items():
             if key in rhs[-1] and (other := rhs[-1][key]) != value:
@@ -251,14 +277,16 @@ class CFGBuilder(NodeVisitor):
                     f"{key}.{self.ssa_list[-1][key]} = φ({key}.{value}, {key}.{other})"
                 )
                 self.current = Statement(
-                        NodeData(_id=self.counter, _type=NodeType.ASSIGN, label=label)
-                    )
-                self.statements.append(self.current)
+                    NodeData(_id=self.counter, _type=NodeType.ASSIGN, label=label)
+                )
+                statements.append(self.current)
             self.id2statement[self.counter] = self.current
         return edited
 
     def __create_phi_functions(self) -> None:
-        edited: list = self.__create_phi_block(self.if_true_ssa, self.if_false_ssa)
+        edited: list = self.__create_phi_block(
+            self.statements, self.if_true_ssa, self.if_false_ssa
+        )
 
         check = True
         for key, value in self.if_before_true_ssa[-1].items():
@@ -266,7 +294,9 @@ class CFGBuilder(NodeVisitor):
                 check = self.if_true_ssa[-1][key] == value
 
         if not check:
-            self.__create_phi_block(self.if_true_ssa, self.if_before_true_ssa)
+            self.__create_phi_block(
+                self.statements, self.if_true_ssa, self.if_before_true_ssa
+            )
 
     def visit_If(self, node):
         self.__visit_Condition(node, self.statements, IfStatement)
@@ -339,6 +369,16 @@ class CFGBuilder(NodeVisitor):
             orelse=node.orelse,
         )
         self.counter += 1
+
+        current_before = deepcopy(self.current)
+        self.ssa_list_before = deepcopy(self.ssa_list)
+        statements_before = deepcopy(self.statements)
+        counter_before = deepcopy(self.counter)
+        id2statement_before = deepcopy(self.id2statement)
+        while_nodes_before = deepcopy(self.while_nodes)
+        node_after_while_before = deepcopy(self.node_after_while)
+        last_node_while_before = deepcopy(self.last_node_while)
+
         self.__visit_Condition(
             while_node,
             self.statements,
@@ -347,6 +387,30 @@ class CFGBuilder(NodeVisitor):
                 variable=variable,
                 step=step_value,
             ),
+        )
+        self.ssa_list_after = deepcopy(self.ssa_list)
+
+        self.finded_keys = []
+        for key, value in self.ssa_list[-1].items():
+            if key in self.ssa_list_before[-1] and value != self.ssa_list_before[-1][key]:
+                self.finded_keys.append(key)
+
+        self.current = current_before
+        self.statements = statements_before
+        self.counter = counter_before
+        self.ssa_list = deepcopy(self.ssa_list_before)
+        self.id2statement = id2statement_before
+        self.while_nodes = while_nodes_before
+        self.node_after_while = node_after_while_before
+        self.last_node_while = last_node_while_before
+
+        for key in self.finded_keys:
+            self.ssa_list[-1][key] += 1
+
+        self.__visit_Condition(
+            while_node,
+            self.statements,
+            WhileStatement,
         )
 
     # This funciton need for setting all return statements

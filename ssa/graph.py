@@ -73,6 +73,7 @@ class GraphBuilder:
         is_continue=False,
         ltail="",
         lhead="",
+        phi=False,
     ) -> None:
         # "is_break" and "is_continue"
         # cannot be assigned "True" both
@@ -92,8 +93,13 @@ class GraphBuilder:
         elif is_continue:
             label = "C"
 
+        if phi:
+            current_id = current._id - 1
+        else:
+            current_id = current._id
+
         self.graph.add_edge(
-            Edge(previous._id, current._id, label=label, ltail=ltail, lhead=lhead)
+            Edge(previous._id, current_id, label=label, ltail=ltail, lhead=lhead)
         )
 
     def build(self):
@@ -124,7 +130,9 @@ class GraphBuilder:
                             case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
                                 current.append(item)
                             case _:
-                                self.add_edge(item, current[0])
+                                print(current[0])
+                                print(item)
+                                self.add_edge(item, current[0], phi=True)
             elif isinstance(statement, IfStatement):
                 self.graph.add_node(
                     Node(

@@ -9,7 +9,7 @@ from .graph import GraphBuilder
 def main():
     # Example of Python code
     # See `../tests/example.py` for details
-    python_code = Path("./tests/fib.py").read_text(encoding="utf-8")
+    python_code = Path("./tests/test_inner_loops.py").read_text(encoding="utf-8")
 
     # Validate that syntax is correct
     try:
