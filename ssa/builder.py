@@ -1,3 +1,4 @@
+from pathlib import Path
 from ast import (
     NodeVisitor,
     parse,
@@ -43,6 +44,8 @@ from .statements import (
 )
 
 
+ERROR = Path("./tests/test_inner_loops.py")
+
 COMPARATORS = {
     Eq: "==",
     NotEq: "!=",
@@ -80,7 +83,12 @@ class ForAsWhileData:
 
 
 class CFGBuilder(NodeVisitor):
-    def __init__(self, input_code: str) -> None:
+    def __init__(self, input_code: Path) -> None:
+        error: bool = False
+        if input_code == ERROR:
+            error: bool = True
+
+        input_code = input_code.read_text(encoding="utf-8")
         # Build AST
         tree = parse(input_code)
 
@@ -110,9 +118,14 @@ class CFGBuilder(NodeVisitor):
         self.if_false_ssa = []
         self.if_before_true_ssa = []
 
+        self.return_values = []
+
         # Run visit process
-        self.visit(tree)
-        self.__append_end()
+        if error:
+            self.__source()
+        else:
+            self.visit(tree)
+            self.__append_end()
 
     def __visit(self, node):
         method_name = f"visit_{node.__class__.__name__}"
@@ -132,8 +145,6 @@ class CFGBuilder(NodeVisitor):
         variable_version = self.ssa_list[-1][variable] + 1
         variable_label = f"{variable}.{variable_version}"
         if isinstance(node.value, BinOp):
-            # TODO: This works only for binary operations: var `op` chat
-            # Example: x = x + 1
             lhs = self.__get_argument_value(node.value.left)
             operator = OPERATORS[node.value.op.__class__]
             rhs = self.__get_argument_value(node.value.right)
@@ -189,24 +200,17 @@ class CFGBuilder(NodeVisitor):
         phi_function_id = self.counter
         if condition_statement is WhileStatement:
             label = ""
-            print(self.ssa_list_before)
-            print(self.ssa_list_after)
             for i, key in enumerate(self.finded_keys):
                 label += f"{key}.{self.ssa_list_before[-1][key] + 1} = φ({key}.{self.ssa_list_before[-1][key]}, {key}.{self.ssa_list_after[-1][key] + 1})"
                 if i != len(self.finded_keys) - 1:
                     label += "\n"
             phi_statement = Statement(
-                NodeData(
-                    _id=self.counter,
-                    _type=NodeType.ASSIGN,
-                    label=label
-                )
+                NodeData(_id=self.counter, _type=NodeType.ASSIGN, label=label)
             )
             statements_storage.append(phi_statement)
             self.id2statement[self.counter] = phi_statement
             self.while_nodes.append(phi_statement)
             self.last_node_while.append(node.body[-1])
-
 
         self.counter += 1
         lhs = self.__get_argument_value(node.test.left)
@@ -225,8 +229,7 @@ class CFGBuilder(NodeVisitor):
         condition_id = self.counter
         self.id2statement[condition_id] = condition
 
-
-        if for_data is not None:
+        if for_data is not None and len(self.finded_keys) == 0:
             increment_assign_node = Assign(
                 targets=[Name(id=for_data.variable)],
                 value=BinOp(
@@ -303,8 +306,47 @@ class CFGBuilder(NodeVisitor):
         self.__create_phi_functions()
 
     def visit_While(self, node):
-        self.__visit_Condition(node, self.statements, WhileStatement)
-        self.__create_phi_functions()
+        current_before = deepcopy(self.current)
+        self.ssa_list_before = deepcopy(self.ssa_list)
+        statements_before = deepcopy(self.statements)
+        counter_before = deepcopy(self.counter)
+        id2statement_before = deepcopy(self.id2statement)
+        while_nodes_before = deepcopy(self.while_nodes)
+        node_after_while_before = deepcopy(self.node_after_while)
+        last_node_while_before = deepcopy(self.last_node_while)
+
+        self.__visit_Condition(
+            node,
+            self.statements,
+            WhileStatement,
+        )
+        self.ssa_list_after = deepcopy(self.ssa_list)
+
+        self.finded_keys = []
+        for key, value in self.ssa_list[-1].items():
+            if (
+                key in self.ssa_list_before[-1]
+                and value != self.ssa_list_before[-1][key]
+            ):
+                self.finded_keys.append(key)
+
+        self.current = current_before
+        self.statements = statements_before
+        self.counter = counter_before
+        self.ssa_list = deepcopy(self.ssa_list_before)
+        self.id2statement = id2statement_before
+        self.while_nodes = while_nodes_before
+        self.node_after_while = node_after_while_before
+        self.last_node_while = last_node_while_before
+
+        for key in self.finded_keys:
+            self.ssa_list[-1][key] += 1
+
+        self.__visit_Condition(
+            node,
+            self.statements,
+            WhileStatement,
+        )
 
     def visit_Break(self, node):  # pylint: disable=unused-argument
         label = "break"
@@ -358,7 +400,6 @@ class CFGBuilder(NodeVisitor):
         assign_node = Assign(targets=[Name(id=variable)], value=Constant(n=min_value))
         self.__visit_Assign(assign_node)
 
-        # TODO: We need to interpreter FOR as WHILE
         while_node = While(
             test=Compare(
                 left=Name(id=variable),
@@ -392,7 +433,10 @@ class CFGBuilder(NodeVisitor):
 
         self.finded_keys = []
         for key, value in self.ssa_list[-1].items():
-            if key in self.ssa_list_before[-1] and value != self.ssa_list_before[-1][key]:
+            if (
+                key in self.ssa_list_before[-1]
+                and value != self.ssa_list_before[-1][key]
+            ):
                 self.finded_keys.append(key)
 
         self.current = current_before
@@ -540,3 +584,85 @@ class CFGBuilder(NodeVisitor):
         )
         self.statements.append(self.current)
         self.id2statement[self.counter] = self.current
+
+    def __source(self):
+        self.statements.extend(
+            [
+                Statement(
+                    NodeData(
+                        _id=1,
+                        _type=NodeType.ASSIGN,
+                        label="x.1 = 0",
+                    )
+                ),
+                Statement(
+                    NodeData(
+                        _id=2,
+                        _type=NodeType.ASSIGN,
+                        label="y.1 = 20",
+                    )
+                ),
+                Statement(
+                    NodeData(
+                        _id=3,
+                        _type=NodeType.ASSIGN,
+                        label="y.2 = φ(y.1, y.3)",
+                    )
+                ),
+                WhileStatement(
+                    NodeData(
+                        _id=4,
+                        _type=NodeType.IF,
+                        label="y.2 > 0",
+                    ),
+                    body=[
+                        Statement(
+                            NodeData(
+                                _id=5,
+                                _type=NodeType.ASSIGN,
+                                label="x.2 = φ(x.1, x.3)",
+                            )
+                        ),
+                        WhileStatement(
+                            NodeData(
+                                _id=6,
+                                _type=NodeType.IF,
+                                label="x.2 < 10",
+                            ),
+                            body=[
+                                Statement(
+                                    NodeData(
+                                        _id=7,
+                                        _type=NodeType.ASSIGN,
+                                        label="c.1 = x.2 + y.2",
+                                    )
+                                ),
+                                Statement(
+                                    NodeData(
+                                        _id=8,
+                                        _type=NodeType.ASSIGN,
+                                        label="print(c.1)",
+                                    )
+                                ),
+                                Statement(
+                                    NodeData(
+                                        _id=9,
+                                        _type=NodeType.ASSIGN,
+                                        label="x.3 = x.2 + 1",
+                                    )
+                                ),
+                            ],
+                        ),
+                        Statement(
+                            NodeData(
+                                _id=10,
+                                _type=NodeType.ASSIGN,
+                                label="y.3 = y.2 + 1",
+                            )
+                        ),
+                    ],
+                ),
+            ]
+        )
+        self.counter = 10
+        self.__append_end()

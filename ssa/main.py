@@ -9,7 +9,8 @@ from .graph import GraphBuilder
 def main():
     # Example of Python code
     # See `../tests/example.py` for details
-    python_code = Path("./tests/test_inner_loops.py").read_text(encoding="utf-8")
+    python_file = Path("./tests/test_phi_simple.py")
+    python_code = python_file.read_text(encoding="utf-8")
 
     # Validate that syntax is correct
     try:
@@ -18,7 +19,8 @@ def main():
         print(f"Syntax Error: {exc}")
         exit(1)
 
-    builder = CFGBuilder(python_code)
+    builder = CFGBuilder(python_file)
+    print("STATEMENTS:")
     pprint(builder.statements)
 
     graph_builder = GraphBuilder(builder)

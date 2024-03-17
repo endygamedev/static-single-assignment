@@ -130,8 +130,6 @@ class GraphBuilder:
                             case NodeType.BREAK | NodeType.CONTINUE | NodeType.RETURN:
                                 current.append(item)
                             case _:
-                                print(current[0])
-                                print(item)
                                 self.add_edge(item, current[0], phi=True)
             elif isinstance(statement, IfStatement):
                 self.graph.add_node(

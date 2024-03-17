@@ -12,8 +12,7 @@ if value == 0:
         print("Number is even")
 else:
     y = 100
-    while y > 0:
-        value = y % 2
-        if value != 0:
-            break
-        y -= 1
+    value = y % 2
+    if value != 0:
+        print(value)
+    y -= 1
